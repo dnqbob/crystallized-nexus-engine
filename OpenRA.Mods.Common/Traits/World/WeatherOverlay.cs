@@ -245,6 +245,19 @@ namespace OpenRA.Mods.Common.Traits
 			var viewport = new Rectangle(center - new int2(viewportSize) / 2, viewportSize);
 			var wcr = Game.Renderer.WorldRgbaColorRenderer;
 
+			// Compute the screen-pixel AABB of the four map corners so particles are not
+			// rendered in the black void outside the playable area.
+			var mb = world.Map.Bounds;
+			var sc0 = wr.ScreenPxPosition(world.Map.CenterOfCell(new MPos(mb.Left, mb.Top).ToCPos(world.Map)));
+			var sc1 = wr.ScreenPxPosition(world.Map.CenterOfCell(new MPos(mb.Right - 1, mb.Top).ToCPos(world.Map)));
+			var sc2 = wr.ScreenPxPosition(world.Map.CenterOfCell(new MPos(mb.Left, mb.Bottom - 1).ToCPos(world.Map)));
+			var sc3 = wr.ScreenPxPosition(world.Map.CenterOfCell(new MPos(mb.Right - 1, mb.Bottom - 1).ToCPos(world.Map)));
+			var mapPixelBounds = Rectangle.FromLTRB(
+				Math.Min(Math.Min(sc0.X, sc1.X), Math.Min(sc2.X, sc3.X)),
+				Math.Min(Math.Min(sc0.Y, sc1.Y), Math.Min(sc2.Y, sc3.Y)),
+				Math.Max(Math.Max(sc0.X, sc1.X), Math.Max(sc2.X, sc3.X)),
+				Math.Max(Math.Max(sc0.Y, sc1.Y), Math.Max(sc2.Y, sc3.Y)));
+
 			// SwingSpeed is defined in px/tick so we must account for the fraction of a tick that elapsed since the last render.
 			// The scale is capped at 1 tick to avoid unexpected behaviour at game start, if RunTime overflows, or if the game stalls.
 			var runtime = Game.RunTime;
@@ -282,6 +295,10 @@ namespace OpenRA.Mods.Common.Traits
 
 					particles[i] = p = new Particle(p, new float2(viewport.Left + dx, viewport.Top + dy));
 				}
+
+				// Skip rendering particles outside the playable map area
+				if (!mapPixelBounds.Contains(p.Pos.ToInt2()))
+					continue;
 
 				// Render the particle
 				// We must provide a z coordinate to stop the GL near and far Z limits from culling the geometry

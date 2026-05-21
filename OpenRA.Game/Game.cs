@@ -726,7 +726,24 @@ namespace OpenRA
 				if (worldRenderer != null && !worldRenderer.World.IsLoadingGameSave)
 				{
 					Renderer.BeginWorld(worldRenderer.Viewport.CenterLocation, worldRenderer.Viewport.ViewportSize);
-					Sound.SetListenerPosition(worldRenderer.Viewport.CenterPosition);
+
+					// Place the audio listener above the battlefield. At the default
+					// (most zoomed-out) zoom the elevation matches the long-standing
+					// constant, so the mix is unchanged there. Zooming in lowers the
+					// listener so on-screen action becomes more positional/present.
+					// The factor is clamped to <= 1, so the listener never rises
+					// above the baseline: zooming never makes anything louder than
+					// the zoomed-in state, and off-screen sources never overtake
+					// on-screen ones (the regression that blocked upstream #22121).
+					const int ListenerElevation = 2133;
+					var viewport = worldRenderer.Viewport;
+					var zoom = viewport.Zoom;
+					var minZoom = viewport.MinZoom;
+					var elevation = ListenerElevation;
+					if (zoom > 0f && minZoom > 0f)
+						elevation = (int)(ListenerElevation * Math.Clamp(minZoom / zoom, 0.6f, 1f));
+
+					Sound.SetListenerPosition(viewport.CenterPosition + new WVec(0, 0, elevation));
 					using (new PerfSample("render_world"))
 						worldRenderer.Draw();
 				}

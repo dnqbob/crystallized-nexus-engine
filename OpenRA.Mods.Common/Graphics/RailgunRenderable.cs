@@ -73,7 +73,7 @@ namespace OpenRA.Mods.Common.Graphics
 				angle += railgun.AngleStep;
 			}
 
-			Game.Renderer.WorldRgbaColorRenderer.DrawLine(points, screenWidth, Color.FromArgb(alpha, railgun.HelixColor));
+			Game.Renderer.WorldRgbaColorRenderer.DrawLine(points, screenWidth, Color.FromArgb(alpha, railgun.HelixColor), ignoreWorldTint: true);
 		}
 
 		public void RenderDebugGeometry(WorldRenderer wr) { }

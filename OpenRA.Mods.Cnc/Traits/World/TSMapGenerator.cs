@@ -1244,10 +1244,19 @@ namespace OpenRA.Mods.Cnc.Traits
 					foreach (var sub in SplitRoadRun(run, perp))
 					{
 						PaintPavedRoadRun(sub, param.PavedRoadNorthEastSouthWestTile, perp);
-						var cx = sub[0].X;
-						var h = map.Height[sub[0]];
-						StampRoadEnd(new CPos(cx - 2, sub[0].Y - 3), param.PavedRoadClearNorthWestTile, 4, 3, h);
-						StampRoadEnd(new CPos(cx - 1, sub[^1].Y + 1), param.PavedRoadClearSouthEastTile, 4, 3, h);
+						if (IsPavedRoadDeadEnd(roads, sub[0], PavedRoadConnections.SouthEast))
+						{
+							var h = map.Height[sub[0]];
+							if (!TryStampRoadTemplate(new CPos(sub[0].X - 1, sub[0].Y - 3), param.PavedRoadClearNorthEastTile, 3, 4, h, false))
+								StampRoadCap(sub[0], param.PavedRoadEndNorthEastTile, 3, 1, perp, h);
+						}
+
+						if (IsPavedRoadDeadEnd(roads, sub[^1], PavedRoadConnections.NorthWest))
+						{
+							var h = map.Height[sub[^1]];
+							if (!TryStampRoadTemplate(new CPos(sub[^1].X - 1, sub[^1].Y), param.PavedRoadClearSouthWestTile, 3, 4, h, false))
+								StampRoadCap(sub[^1], param.PavedRoadEndSouthWestTile, 3, 1, perp, h);
+						}
 					}
 				}
 
@@ -1257,15 +1266,32 @@ namespace OpenRA.Mods.Cnc.Traits
 					foreach (var sub in SplitRoadRun(run, perp))
 					{
 						PaintPavedRoadRun(sub, param.PavedRoadNorthWestSouthEastTile, perp);
-						var cy = sub[0].Y;
-						var h = map.Height[sub[0]];
-						StampRoadEnd(new CPos(sub[0].X - 3, cy - 1), param.PavedRoadClearSouthWestTile, 3, 4, h);
-						StampRoadEnd(new CPos(sub[^1].X + 1, cy - 1), param.PavedRoadClearNorthEastTile, 3, 4, h);
+						if (IsPavedRoadDeadEnd(roads, sub[0], PavedRoadConnections.NorthEast))
+						{
+							var h = map.Height[sub[0]];
+							if (!TryStampRoadTemplate(new CPos(sub[0].X - 3, sub[0].Y - 1), param.PavedRoadClearNorthWestTile, 4, 3, h, false))
+								StampRoadCap(sub[0], param.PavedRoadEndNorthWestTile, 1, 3, perp, h);
+						}
+
+						if (IsPavedRoadDeadEnd(roads, sub[^1], PavedRoadConnections.SouthWest))
+						{
+							var h = map.Height[sub[^1]];
+							if (!TryStampRoadTemplate(new CPos(sub[^1].X, sub[^1].Y - 1), param.PavedRoadClearSouthEastTile, 4, 3, h, false))
+								StampRoadCap(sub[^1], param.PavedRoadEndSouthEastTile, 1, 3, perp, h);
+						}
 					}
 				}
 
 				foreach (var kv in roads)
 					PaintPavedRoadJunction(kv.Key, kv.Value);
+			}
+
+			static bool IsPavedRoadDeadEnd(
+				IReadOnlyDictionary<CPos, PavedRoadConnections> roads,
+				CPos cpos,
+				PavedRoadConnections connectionTowardRoad)
+			{
+				return roads.TryGetValue(cpos, out var connections) && connections == connectionTowardRoad;
 			}
 
 			IEnumerable<List<CPos>> SplitRoadRun(IReadOnlyList<CPos> run, CVec perp)
@@ -1293,26 +1319,51 @@ namespace OpenRA.Mods.Cnc.Traits
 			{
 				if (!map.Contains(cpos) || !playable[cpos])
 					return false;
+
+				if (map.Ramp[cpos] is >= 1 and <= 4)
+					return true;
+
 				var t = map.Tiles[cpos].Type;
 				return !(t > 0 && param.RampTiles.Contains(t));
 			}
 
-			void StampRoadEnd(CPos origin, ushort template, int width, int height, byte roadHeight)
+			void StampRoadCap(CPos center, ushort template, int width, int height, CVec perp, byte roadHeight)
+			{
+				TryStampRoadTemplate(center - perp, template, width, height, roadHeight);
+			}
+
+			bool TryStampRoadTemplate(CPos origin, ushort template, int width, int height, byte roadHeight, bool requireRoadHeight = true)
 			{
 				for (var y = 0; y < height; y++)
 					for (var x = 0; x < width; x++)
 					{
 						var cpos = origin + new CVec(x, y);
-						if (!map.Contains(cpos) || !playable[cpos])
-							continue;
-						if (map.Height[cpos] != roadHeight)
-							continue;
-						if (param.RampTiles.Contains(map.Tiles[cpos].Type))
-							continue;
-						if (!HasFlatPavedRoadFootprint(cpos))
-							continue;
+						if (!IsRoadTemplateCellValid(cpos, roadHeight, requireRoadHeight))
+							return false;
+					}
+
+				for (var y = 0; y < height; y++)
+					for (var x = 0; x < width; x++)
+					{
+						var cpos = origin + new CVec(x, y);
 						map.Tiles[cpos] = new TerrainTile(template, (byte)(y * width + x));
 					}
+
+				return true;
+			}
+
+			bool IsRoadTemplateCellValid(CPos cpos, byte roadHeight, bool requireRoadHeight)
+			{
+				if (!map.Contains(cpos) || !playable[cpos])
+					return false;
+				if (requireRoadHeight && map.Height[cpos] != roadHeight)
+					return false;
+
+				var tileType = map.Tiles[cpos].Type;
+				if (!requireRoadHeight && tileType == param.WaterTile)
+					return false;
+
+				return !(tileType > 0 && param.RampTiles.Contains(tileType));
 			}
 
 			static IEnumerable<List<CPos>> PavedRoadRuns(
@@ -1348,10 +1399,30 @@ namespace OpenRA.Mods.Cnc.Traits
 			{
 				foreach (var cpos in run)
 				{
-					SetRoadTile(cpos - perp, template, 0);
-					SetRoadTile(cpos, template, 1);
-					SetRoadTile(cpos + perp, template, 2);
+					var roadTemplate = PavedRoadSlopeTile(cpos, perp) ?? template;
+					SetRoadTile(cpos - perp, roadTemplate, 0);
+					SetRoadTile(cpos, roadTemplate, 1);
+					SetRoadTile(cpos + perp, roadTemplate, 2);
 				}
+			}
+
+			ushort? PavedRoadSlopeTile(CPos cpos, CVec perp)
+			{
+				var ramp = map.Ramp[cpos];
+				if (ramp is < 1 or > 4)
+					return null;
+
+				if (map.Ramp[cpos - perp] != ramp || map.Ramp[cpos + perp] != ramp)
+					return null;
+
+				return (perp, ramp) switch
+				{
+					({ X: 0, Y: 1 }, 1) => param.PavedRoadSlopeNorthWestDownSouthEastUpTile,
+					({ X: 0, Y: 1 }, 3) => param.PavedRoadSlopeNorthWestUpSouthEastDownTile,
+					({ X: 1, Y: 0 }, 2) => param.PavedRoadSlopeNorthEastDownSouthWestUpTile,
+					({ X: 1, Y: 0 }, 4) => param.PavedRoadSlopeNorthEastUpSouthWestDownTile,
+					_ => null,
+				};
 			}
 
 			void PaintPavedRoadJunction(CPos cpos, PavedRoadConnections connections)
@@ -1410,9 +1481,18 @@ namespace OpenRA.Mods.Cnc.Traits
 				if (!map.Contains(cpos) || !playable[cpos])
 					return;
 				var tileType = map.Tiles[cpos].Type;
-				if (tileType > 0 && param.RampTiles.Contains(tileType))
+				if (tileType > 0 && param.RampTiles.Contains(tileType) && !IsPavedRoadSlopeTile(template))
 					return;
 				map.Tiles[cpos] = new TerrainTile(template, index);
+			}
+
+			bool IsPavedRoadSlopeTile(ushort template)
+			{
+				return
+					template == param.PavedRoadSlopeNorthWestDownSouthEastUpTile ||
+					template == param.PavedRoadSlopeNorthEastDownSouthWestUpTile ||
+					template == param.PavedRoadSlopeNorthWestUpSouthEastDownTile ||
+					template == param.PavedRoadSlopeNorthEastUpSouthWestDownTile;
 			}
 
 			void DecorateFloorTiles(ushort tile, int fraction, CellLayer<bool> addIn = null)
