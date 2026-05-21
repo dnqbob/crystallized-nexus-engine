@@ -1289,10 +1289,8 @@ namespace OpenRA.Mods.Cnc.Traits
 			static bool IsPavedRoadDeadEnd(
 				IReadOnlyDictionary<CPos, PavedRoadConnections> roads,
 				CPos cpos,
-				PavedRoadConnections connectionTowardRoad)
-			{
-				return roads.TryGetValue(cpos, out var connections) && connections == connectionTowardRoad;
-			}
+				PavedRoadConnections connectionTowardRoad) =>
+				roads.TryGetValue(cpos, out var connections) && connections == connectionTowardRoad;
 
 			IEnumerable<List<CPos>> SplitRoadRun(IReadOnlyList<CPos> run, CVec perp)
 			{
@@ -1327,10 +1325,8 @@ namespace OpenRA.Mods.Cnc.Traits
 				return !(t > 0 && param.RampTiles.Contains(t));
 			}
 
-			void StampRoadCap(CPos center, ushort template, int width, int height, CVec perp, byte roadHeight)
-			{
+			void StampRoadCap(CPos center, ushort template, int width, int height, CVec perp, byte roadHeight) =>
 				TryStampRoadTemplate(center - perp, template, width, height, roadHeight);
-			}
 
 			bool TryStampRoadTemplate(CPos origin, ushort template, int width, int height, byte roadHeight, bool requireRoadHeight = true)
 			{

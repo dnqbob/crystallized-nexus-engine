@@ -172,7 +172,8 @@ namespace OpenRA.Graphics
 			}
 		}
 
-		public void DrawLine(IEnumerable<float3> points, float width, Color color, bool connectSegments = false, BlendMode blendMode = BlendMode.Alpha, bool ignoreWorldTint = false)
+		public void DrawLine(IEnumerable<float3> points, float width, Color color,
+			bool connectSegments = false, BlendMode blendMode = BlendMode.Alpha, bool ignoreWorldTint = false)
 		{
 			if (!connectSegments)
 				DrawDisconnectedLine(points, width, color, blendMode, ignoreWorldTint);
