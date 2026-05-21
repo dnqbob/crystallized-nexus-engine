@@ -55,14 +55,14 @@ namespace OpenRA.Mods.Common.Graphics
 				var b = wr.Screen3DPosition(Pos + corner);
 				var c = wr.Screen3DPosition(Pos + corner + length);
 				var d = wr.Screen3DPosition(Pos - corner + length);
-				Game.Renderer.WorldRgbaColorRenderer.FillRect(a, b, c, d, color);
+				Game.Renderer.WorldRgbaColorRenderer.FillRect(a, b, c, d, color, ignoreWorldTint: true);
 			}
 			else
 			{
 				var start = wr.Screen3DPosition(Pos);
 				var end = wr.Screen3DPosition(Pos + length);
 				var screenWidth = wr.ScreenVector(new WVec(width, WDist.Zero, WDist.Zero))[0];
-				Game.Renderer.WorldRgbaColorRenderer.DrawLine(start, end, screenWidth, color);
+				Game.Renderer.WorldRgbaColorRenderer.DrawLine(start, end, screenWidth, color, ignoreWorldTint: true);
 			}
 		}
 
