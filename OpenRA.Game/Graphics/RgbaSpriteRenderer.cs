@@ -38,12 +38,12 @@ namespace OpenRA.Graphics
 			parent.DrawSprite(s, 0, location, scale, rotation);
 		}
 
-		public void DrawSprite(Sprite s, in float3 location, float scale, in float3 tint, float alpha, float rotation = 0f)
+		public void DrawSprite(Sprite s, in float3 location, float scale, in float3 tint, float alpha, float rotation = 0f, bool ignoreWorldTint = false)
 		{
 			if (s.Channel != TextureChannel.RGBA)
 				throw new InvalidOperationException("DrawRGBASprite requires a RGBA sprite.");
 
-			parent.DrawSprite(s, 0, location, scale, tint, alpha, rotation);
+			parent.DrawSprite(s, 0, location, scale, tint, alpha, rotation, ignoreWorldTint);
 		}
 
 		public void DrawSprite(Sprite s, in float3 a, in float3 b, in float3 c, in float3 d, in float3 tint, float alpha)

@@ -196,7 +196,7 @@ namespace OpenRA.Graphics
 				return;
 
 			var offset = vertexRowStride * uv.V + 4 * uv.U;
-			Util.FastCreateQuad(vertices, pos, sprite, samplers, palette?.TextureIndex ?? 0, offset, scale * sprite.Size, alpha * float3.Ones, alpha);
+			Util.FastCreateQuad(vertices, pos, sprite, samplers, palette?.TextureIndex ?? 0, offset, scale * sprite.Size, alpha * float3.Ones, alpha, 0f, ignoreTint);
 			palettes[uv.V * map.MapSize.Width + uv.U] = palette;
 
 			if (worldRenderer.TerrainLighting != null)

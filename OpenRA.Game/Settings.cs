@@ -233,6 +233,8 @@ namespace OpenRA
 		public bool SyncCheckBotModuleCode = false;
 	}
 
+	public enum GradingMode { Off, Cinematic, ToxHaze }
+
 	[YamlNode("Graphics", shared: true)]
 	public class GraphicSettings : SettingsModule
 	{
@@ -269,6 +271,12 @@ namespace OpenRA
 
 		[Desc("Enable water reflection and overlay post-process effects.")]
 		public bool WaterEffects = true;
+
+		[Desc("Full-screen atmospheric color grading mode: Off, Cinematic or ToxHaze.")]
+		public GradingMode PostProcessGrading = GradingMode.Cinematic;
+
+		[Desc("Enable Tiberium glow, heat-shimmer and ground light-bleed post-process effects.")]
+		public bool TiberiumEffects = true;
 
 		[Desc("Enable procedural cloud shadow post-process effect.")]
 		public bool CloudShadows = true;

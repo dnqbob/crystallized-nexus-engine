@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using OpenRA.GameRules;
 using OpenRA.Graphics;
 using OpenRA.Mods.Cnc.Graphics;
 using OpenRA.Mods.Common;
@@ -34,7 +35,7 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 		int? ShadowGroundZ(Actor self);
 	}
 
-	public class RenderVoxelsInfo : TraitInfo, IRenderActorPreviewInfo, Requires<BodyOrientationInfo>
+	public class RenderVoxelsInfo : TraitInfo, IRenderActorPreviewInfo, IRulesetLoaded, Requires<BodyOrientationInfo>
 	{
 		[Desc("Defaults to the actor name.")]
 		public readonly string Image = null;
@@ -60,8 +61,39 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 		public readonly WAngle LightYaw = WAngle.FromDegrees(240);
 		public readonly ImmutableArray<float> LightAmbientColor = [0.6f, 0.6f, 0.6f];
 		public readonly ImmutableArray<float> LightDiffuseColor = [0.4f, 0.4f, 0.4f];
+		[Desc("Palette index ranges rendered as unlit overlay pixels that ignore world tint. Example: 1, 15, 240, 255.")]
+		public readonly int2[] FullBrightPaletteIndexRanges = [];
+
+		public int FullBrightStartIndex { get; private set; } = -1;
+		public int FullBrightEndIndex { get; private set; } = -1;
+		public int FullBrightStartIndex2 { get; private set; } = -1;
+		public int FullBrightEndIndex2 { get; private set; } = -1;
 
 		public override object Create(ActorInitializer init) { return new RenderVoxels(init.Self, this); }
+
+		void IRulesetLoaded<ActorInfo>.RulesetLoaded(Ruleset rules, ActorInfo ai)
+		{
+			if (FullBrightPaletteIndexRanges.Length > 2)
+				throw new YamlException($"{nameof(FullBrightPaletteIndexRanges)} supports at most two palette index ranges.");
+
+			foreach (var range in FullBrightPaletteIndexRanges)
+			{
+				if (range.X < 0 || range.X > 255 || range.Y < 0 || range.Y > 255 || range.Y < range.X)
+					throw new YamlException($"{nameof(FullBrightPaletteIndexRanges)} must use valid ranges between 0 and 255.");
+			}
+
+			if (FullBrightPaletteIndexRanges.Length > 0)
+			{
+				FullBrightStartIndex = FullBrightPaletteIndexRanges[0].X;
+				FullBrightEndIndex = FullBrightPaletteIndexRanges[0].Y;
+			}
+
+			if (FullBrightPaletteIndexRanges.Length > 1)
+			{
+				FullBrightStartIndex2 = FullBrightPaletteIndexRanges[1].X;
+				FullBrightEndIndex2 = FullBrightPaletteIndexRanges[1].Y;
+			}
+		}
 
 		public virtual IEnumerable<IActorPreview> RenderPreview(ActorPreviewInitializer init)
 		{
@@ -167,7 +199,9 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 					Renderer, components, self.CenterPosition, 0, camera, Info.Scale,
 					lightSource, Info.LightAmbientColor, Info.LightDiffuseColor,
 					colorPalette, normalsPalette, shadowPalette,
-					1f, float3.Ones, TintModifiers.None, ShadowGroundZ)
+					1f, float3.Ones, TintModifiers.None, ShadowGroundZ,
+					fullBrightStartIndex: Info.FullBrightStartIndex, fullBrightEndIndex: Info.FullBrightEndIndex,
+					fullBrightStartIndex2: Info.FullBrightStartIndex2, fullBrightEndIndex2: Info.FullBrightEndIndex2)
 			];
 		}
 
