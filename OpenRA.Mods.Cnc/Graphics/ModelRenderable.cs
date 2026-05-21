@@ -32,6 +32,10 @@ namespace OpenRA.Mods.Cnc.Graphics
 		readonly Func<int?> shadowGroundZFunc;
 		readonly float scale;
 		readonly bool reflectZ;
+		readonly int fullBrightStartIndex;
+		readonly int fullBrightEndIndex;
+		readonly int fullBrightStartIndex2;
+		readonly int fullBrightEndIndex2;
 
 		public ModelRenderable(
 			ModelRenderer renderer, IEnumerable<ModelAnimation> models, WPos pos, int zOffset, in WRot camera, float scale,
@@ -47,7 +51,9 @@ namespace OpenRA.Mods.Cnc.Graphics
 			ModelRenderer renderer, IEnumerable<ModelAnimation> models, WPos pos, int zOffset, in WRot camera, float scale,
 			in WRot lightSource, ImmutableArray<float> lightAmbientColor, ImmutableArray<float> lightDiffuseColor,
 			PaletteReference color, PaletteReference normals, PaletteReference shadow,
-			float alpha, in float3 tint, TintModifiers tintModifiers, bool isDecoration = false, bool reflectZ = false)
+			float alpha, in float3 tint, TintModifiers tintModifiers, bool isDecoration = false, bool reflectZ = false,
+			int fullBrightStartIndex = -1, int fullBrightEndIndex = -1,
+			int fullBrightStartIndex2 = -1, int fullBrightEndIndex2 = -1)
 		{
 			this.renderer = renderer;
 			this.models = models;
@@ -66,6 +72,10 @@ namespace OpenRA.Mods.Cnc.Graphics
 			TintModifiers = tintModifiers;
 			IsDecoration = isDecoration;
 			this.reflectZ = reflectZ;
+			this.fullBrightStartIndex = fullBrightStartIndex;
+			this.fullBrightEndIndex = fullBrightEndIndex;
+			this.fullBrightStartIndex2 = fullBrightStartIndex2;
+			this.fullBrightEndIndex2 = fullBrightEndIndex2;
 		}
 
 		public ModelRenderable(
@@ -73,10 +83,12 @@ namespace OpenRA.Mods.Cnc.Graphics
 			in WRot lightSource, ImmutableArray<float> lightAmbientColor, ImmutableArray<float> lightDiffuseColor,
 			PaletteReference color, PaletteReference normals, PaletteReference shadow,
 			float alpha, in float3 tint, TintModifiers tintModifiers, Func<int?> shadowGroundZFunc,
-			bool isDecoration = false, bool reflectZ = false)
+			bool isDecoration = false, bool reflectZ = false, int fullBrightStartIndex = -1, int fullBrightEndIndex = -1,
+			int fullBrightStartIndex2 = -1, int fullBrightEndIndex2 = -1)
 			: this(renderer, models, pos, zOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				color, normals, shadow, alpha, tint, tintModifiers, isDecoration, reflectZ)
+				color, normals, shadow, alpha, tint, tintModifiers, isDecoration, reflectZ,
+				fullBrightStartIndex, fullBrightEndIndex, fullBrightStartIndex2, fullBrightEndIndex2)
 		{
 			this.shadowGroundZFunc = shadowGroundZFunc;
 		}
@@ -95,7 +107,8 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new ModelRenderable(
 				renderer, models, Pos, ZOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				newPalette, normalsPalette, shadowPalette, Alpha, Tint, TintModifiers, shadowGroundZFunc, IsDecoration, reflectZ);
+				newPalette, normalsPalette, shadowPalette, Alpha, Tint, TintModifiers, shadowGroundZFunc, IsDecoration, reflectZ,
+				fullBrightStartIndex, fullBrightEndIndex, fullBrightStartIndex2, fullBrightEndIndex2);
 		}
 
 		public IRenderable WithZOffset(int newOffset)
@@ -103,7 +116,8 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new ModelRenderable(
 				renderer, models, Pos, newOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				Palette, normalsPalette, shadowPalette, Alpha, Tint, TintModifiers, shadowGroundZFunc, IsDecoration, reflectZ);
+				Palette, normalsPalette, shadowPalette, Alpha, Tint, TintModifiers, shadowGroundZFunc, IsDecoration, reflectZ,
+				fullBrightStartIndex, fullBrightEndIndex, fullBrightStartIndex2, fullBrightEndIndex2);
 		}
 
 		public IRenderable OffsetBy(in WVec vec)
@@ -111,7 +125,8 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new ModelRenderable(
 				renderer, models, Pos + vec, ZOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				Palette, normalsPalette, shadowPalette, Alpha, Tint, TintModifiers, shadowGroundZFunc, IsDecoration, reflectZ);
+				Palette, normalsPalette, shadowPalette, Alpha, Tint, TintModifiers, shadowGroundZFunc, IsDecoration, reflectZ,
+				fullBrightStartIndex, fullBrightEndIndex, fullBrightStartIndex2, fullBrightEndIndex2);
 		}
 
 		public IRenderable AsDecoration()
@@ -119,7 +134,9 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new ModelRenderable(
 				renderer, models, Pos, ZOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				Palette, normalsPalette, shadowPalette, Alpha, Tint, TintModifiers, shadowGroundZFunc, isDecoration: true, reflectZ);
+				Palette, normalsPalette, shadowPalette, Alpha, Tint, TintModifiers, shadowGroundZFunc, isDecoration: true, reflectZ,
+				fullBrightStartIndex: fullBrightStartIndex, fullBrightEndIndex: fullBrightEndIndex,
+				fullBrightStartIndex2: fullBrightStartIndex2, fullBrightEndIndex2: fullBrightEndIndex2);
 		}
 
 		public ModelRenderable WithZReflection()
@@ -127,7 +144,9 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new ModelRenderable(
 				renderer, models, Pos, ZOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				Palette, normalsPalette, shadowPalette, Alpha, Tint, TintModifiers, shadowGroundZFunc, IsDecoration, reflectZ: true);
+				Palette, normalsPalette, shadowPalette, Alpha, Tint, TintModifiers, shadowGroundZFunc, IsDecoration, reflectZ: true,
+				fullBrightStartIndex: fullBrightStartIndex, fullBrightEndIndex: fullBrightEndIndex,
+				fullBrightStartIndex2: fullBrightStartIndex2, fullBrightEndIndex2: fullBrightEndIndex2);
 		}
 
 		public IModifyableRenderable WithAlpha(float newAlpha)
@@ -135,7 +154,8 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new ModelRenderable(
 				renderer, models, Pos, ZOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				Palette, normalsPalette, shadowPalette, newAlpha, Tint, TintModifiers, shadowGroundZFunc, IsDecoration, reflectZ);
+				Palette, normalsPalette, shadowPalette, newAlpha, Tint, TintModifiers, shadowGroundZFunc, IsDecoration, reflectZ,
+				fullBrightStartIndex, fullBrightEndIndex, fullBrightStartIndex2, fullBrightEndIndex2);
 		}
 
 		public IModifyableRenderable WithTint(in float3 newTint, TintModifiers newTintModifiers)
@@ -143,7 +163,8 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new ModelRenderable(
 				renderer, models, Pos, ZOffset, camera, scale,
 				lightSource, lightAmbientColor, lightDiffuseColor,
-				Palette, normalsPalette, shadowPalette, Alpha, newTint, newTintModifiers, shadowGroundZFunc, IsDecoration, reflectZ);
+				Palette, normalsPalette, shadowPalette, Alpha, newTint, newTintModifiers, shadowGroundZFunc, IsDecoration, reflectZ,
+				fullBrightStartIndex, fullBrightEndIndex, fullBrightStartIndex2, fullBrightEndIndex2);
 		}
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr)
@@ -166,7 +187,9 @@ namespace OpenRA.Mods.Cnc.Graphics
 				renderProxy = model.renderer.RenderAsync(
 					wr, draw, model.camera, model.scale, groundOrientation, model.lightSource,
 					model.lightAmbientColor, model.lightDiffuseColor,
-					model.Palette, model.normalsPalette, model.shadowPalette, model.reflectZ);
+					model.Palette, model.normalsPalette, model.shadowPalette, model.reflectZ,
+					model.fullBrightStartIndex, model.fullBrightEndIndex,
+					model.fullBrightStartIndex2, model.fullBrightEndIndex2);
 			}
 
 			public void Render(WorldRenderer wr)
@@ -207,6 +230,8 @@ namespace OpenRA.Mods.Cnc.Graphics
 				wrsr.DrawSprite(renderProxy.ShadowSprite, sa, sb, sc, sd, t, a);
 				var spritePos = pxOrigin - 0.5f * renderProxy.Sprite.Size;
 				wrsr.DrawSprite(renderProxy.Sprite, spritePos, 1f, t, a);
+				if (renderProxy.FullBrightSprite != null)
+					wrsr.DrawSprite(renderProxy.FullBrightSprite, spritePos, 1f, model.Tint, a, 0f, true);
 			}
 
 			public void RenderDebugGeometry(WorldRenderer wr)

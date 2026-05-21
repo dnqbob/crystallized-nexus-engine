@@ -194,27 +194,27 @@ namespace OpenRA.Graphics
 		}
 
 		internal void DrawSprite(Sprite s, int paletteTextureIndex, in float3 location, float scale, in float3 tint, float alpha,
-			float rotation = 0f)
+			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0)
 		{
 			var samplers = SetRenderStateForSprite(s);
 			Util.FastCreateQuad(vertices, location + scale * s.Offset, s, samplers, paletteTextureIndex, vertexCount, scale * s.Size, tint, alpha,
-								rotation);
+								rotation, ignoreWorldTint, fullBrightPaletteRanges);
 			vertexCount += 4;
 		}
 
 		internal void DrawSprite(Sprite s, PaletteReference pal, in float3 location, in float3 scale, in float3 tint, float alpha,
-			float rotation = 0f)
+			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0)
 		{
 			var samplers = SetRenderStateForSprite(s);
 			Util.FastCreateQuad(vertices, location + scale * s.Offset, s, samplers, ResolveTextureIndex(s, pal), vertexCount, scale * s.Size, tint, alpha,
-								rotation);
+								rotation, ignoreWorldTint, fullBrightPaletteRanges);
 			vertexCount += 4;
 		}
 
 		public void DrawSprite(Sprite s, PaletteReference pal, in float3 location, float scale, in float3 tint, float alpha,
-			float rotation = 0f)
+			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0)
 		{
-			DrawSprite(s, ResolveTextureIndex(s, pal), location, scale, tint, alpha, rotation);
+			DrawSprite(s, ResolveTextureIndex(s, pal), location, scale, tint, alpha, rotation, ignoreWorldTint, fullBrightPaletteRanges);
 		}
 
 		internal void DrawSprite(Sprite s, int paletteTextureIndex, in float3 a, in float3 b, in float3 c, in float3 d, in float3 tint, float alpha)
@@ -297,6 +297,27 @@ namespace OpenRA.Graphics
 			Shader.SetVec("Scroll", scroll.X, scroll.Y, depthMargin != 0f ? scroll.Y : 0);
 			Shader.SetVec("p1", width, height, -depth);
 			Shader.SetVec("p2", -1, -1, depthMargin != 0f ? 1 : 0);
+		}
+
+		// Drifting cloud-shadow uniforms. Must be pushed EVERY world frame (the
+		// time advances per tick) - SetViewportParams is only called on viewport
+		// change, so this is invoked separately from Renderer.BeginWorld.
+		public void SetCloudShadowParams()
+		{
+			Shader.SetVec("CloudShadowAlpha", CloudShadowState.Alpha);
+			Shader.SetVec("CloudShadowScale", CloudShadowState.Scale);
+			Shader.SetVec("CloudShadowWind", CloudShadowState.WindX, CloudShadowState.WindY);
+			Shader.SetVec("CloudShadowTime", CloudShadowState.Time);
+			Shader.SetVec("CloudShadowCoverage", CloudShadowState.Coverage);
+			Shader.SetVec("CloudShadowEdge", CloudShadowState.Edge);
+		}
+
+		// Day/night world tint. Pushed every world frame (advances per tick),
+		// alongside the cloud-shadow params. Identity (1,1,1) = no-op.
+		public void SetWorldTintParams()
+		{
+			Shader.SetVec("WorldDayTintEnabled", 1f);
+			Shader.SetVec("WorldDayTint", WorldTintState.Red, WorldTintState.Green, WorldTintState.Blue);
 		}
 
 		public void SetDepthPreview(bool enabled, float contrast, float offset)

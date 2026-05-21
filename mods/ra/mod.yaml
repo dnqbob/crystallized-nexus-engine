@@ -1,6 +1,6 @@
 Metadata:
 	Title: mod-title
-	Version: bleed
+	Version: cn-20260511
 	Website: https://www.openra.net
 	WebIcon32: https://www.openra.net/images/icons/ra_32x32.png
 	WindowTitle: mod-windowtitle
@@ -68,7 +68,7 @@ FileSystem: ContentInstallerFileSystem
 
 MapFolders:
 	ra|maps: System
-	~^SupportDir|maps/ra/bleed: User
+	~^SupportDir|maps/ra/cn-20260511: User
 
 Rules:
 	ra|rules/misc.yaml

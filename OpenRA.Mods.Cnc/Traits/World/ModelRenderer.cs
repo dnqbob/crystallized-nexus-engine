@@ -23,13 +23,15 @@ namespace OpenRA.Mods.Cnc.Traits
 	{
 		public readonly Sprite Sprite;
 		public readonly Sprite ShadowSprite;
+		public readonly Sprite FullBrightSprite;
 		public readonly float ShadowDirection;
 		public readonly float3[] ProjectedShadowBounds;
 
-		public ModelRenderProxy(Sprite sprite, Sprite shadowSprite, float3[] projectedShadowBounds, float shadowDirection)
+		public ModelRenderProxy(Sprite sprite, Sprite shadowSprite, Sprite fullBrightSprite, float3[] projectedShadowBounds, float shadowDirection)
 		{
 			Sprite = sprite;
 			ShadowSprite = shadowSprite;
+			FullBrightSprite = fullBrightSprite;
 			ProjectedShadowBounds = projectedShadowBounds;
 			ShadowDirection = shadowDirection;
 		}
@@ -101,7 +103,9 @@ namespace OpenRA.Mods.Cnc.Traits
 		public ModelRenderProxy RenderAsync(
 			WorldRenderer wr, IEnumerable<ModelAnimation> models, in WRot camera, float scale,
 			in WRot groundOrientation, in WRot lightSource, ImmutableArray<float> lightAmbientColor, ImmutableArray<float> lightDiffuseColor,
-			PaletteReference color, PaletteReference normals, PaletteReference shadowPalette, bool reflectZ = false)
+			PaletteReference color, PaletteReference normals, PaletteReference shadowPalette, bool reflectZ = false,
+			int fullBrightStartIndex = -1, int fullBrightEndIndex = -1,
+			int fullBrightStartIndex2 = -1, int fullBrightEndIndex2 = -1)
 		{
 			if (!isInFrame)
 				throw new InvalidOperationException("BeginFrame has not been called. You cannot render until a frame has been started.");
@@ -192,6 +196,9 @@ namespace OpenRA.Mods.Cnc.Traits
 
 			var sprite = sheetBuilderForFrame.Allocate(spriteSize, 0, spriteOffset);
 			var shadowSprite = sheetBuilderForFrame.Allocate(shadowSpriteSize, 0, shadowSpriteOffset);
+			var renderFullBright = (fullBrightStartIndex >= 0 && fullBrightEndIndex >= fullBrightStartIndex) ||
+				(fullBrightStartIndex2 >= 0 && fullBrightEndIndex2 >= fullBrightStartIndex2);
+			var fullBrightSprite = renderFullBright ? sheetBuilderForFrame.Allocate(spriteSize, 0, spriteOffset) : null;
 			var sb = sprite.Bounds;
 			var ssb = shadowSprite.Bounds;
 			var spriteCenter = new float2(sb.Left + sb.Width / 2, sb.Top + sb.Height / 2);
@@ -201,6 +208,14 @@ namespace OpenRA.Mods.Cnc.Traits
 			var shadowTranslateMtx = Util.TranslationMatrix(shadowCenter.X - shadowSpriteOffset.X, sheetSize - (shadowCenter.Y - shadowSpriteOffset.Y), 0);
 			var correctionTransform = Util.MatrixMultiply(translateMtx, FlipMtx);
 			var shadowCorrectionTransform = Util.MatrixMultiply(shadowTranslateMtx, ShadowScaleFlipMtx);
+			float[] fullBrightCorrectionTransform = null;
+			if (renderFullBright)
+			{
+				var fbs = fullBrightSprite.Bounds;
+				var fullBrightCenter = new float2(fbs.Left + fbs.Width / 2, fbs.Top + fbs.Height / 2);
+				var fullBrightTranslateMtx = Util.TranslationMatrix(fullBrightCenter.X - spriteOffset.X, sheetSize - (fullBrightCenter.Y - spriteOffset.Y), 0);
+				fullBrightCorrectionTransform = Util.MatrixMultiply(fullBrightTranslateMtx, FlipMtx);
+			}
 
 			void RenderFunc()
 			{
@@ -222,6 +237,7 @@ namespace OpenRA.Mods.Cnc.Traits
 					var shadow = Util.MatrixMultiply(shadowTransform, worldTransform);
 					shadow = Util.MatrixMultiply(shadowCorrectionTransform, shadow);
 
+					var fullBright = renderFullBright ? Util.MatrixMultiply(fullBrightCorrectionTransform, Util.MatrixMultiply(cameraTransform, worldTransform)) : null;
 					var lightTransform = Util.MatrixMultiply(Util.MatrixInverse(rotations), invShadowTransform);
 
 					var frame = m.FrameFunc();
@@ -237,12 +253,19 @@ namespace OpenRA.Mods.Cnc.Traits
 						var lightDirection = ExtractRotationVector(Util.MatrixMultiply(it, lightTransform));
 
 						Render(rd, ModelCache, Util.MatrixMultiply(transform, t), lightDirection,
-							lightAmbientColor, lightDiffuseColor, color.TextureIndex, normals.TextureIndex);
+							lightAmbientColor, lightDiffuseColor, color.TextureIndex, normals.TextureIndex, false,
+							fullBrightStartIndex, fullBrightEndIndex, fullBrightStartIndex2, fullBrightEndIndex2);
 
 						// Disable shadow normals by forcing zero diffuse and identity ambient light
 						if (m.ShowShadow)
 							Render(rd, ModelCache, Util.MatrixMultiply(shadow, t), lightDirection,
-								ShadowAmbient, ShadowDiffuse, shadowPalette.TextureIndex, normals.TextureIndex);
+								ShadowAmbient, ShadowDiffuse, shadowPalette.TextureIndex, normals.TextureIndex, false,
+								fullBrightStartIndex, fullBrightEndIndex, fullBrightStartIndex2, fullBrightEndIndex2);
+
+						if (renderFullBright)
+							Render(rd, ModelCache, Util.MatrixMultiply(fullBright, t), lightDirection,
+								ShadowAmbient, ShadowDiffuse, color.TextureIndex, normals.TextureIndex, true,
+								fullBrightStartIndex, fullBrightEndIndex, fullBrightStartIndex2, fullBrightEndIndex2);
 					}
 				}
 			}
@@ -251,7 +274,7 @@ namespace OpenRA.Mods.Cnc.Traits
 
 			var screenLightVector = Util.MatrixVectorMultiply(invShadowTransform, ZVector);
 			screenLightVector = Util.MatrixVectorMultiply(cameraTransform, screenLightVector);
-			return new ModelRenderProxy(sprite, shadowSprite, screenCorners, -screenLightVector[2] / screenLightVector[1]);
+			return new ModelRenderProxy(sprite, shadowSprite, fullBrightSprite, screenCorners, -screenLightVector[2] / screenLightVector[1]);
 		}
 
 		static void CalculateSpriteGeometry(float2 tl, float2 br, float scale, out Size size, out int2 offset)
@@ -292,10 +315,15 @@ namespace OpenRA.Mods.Cnc.Traits
 			IModelCache cache,
 			float[] t, float[] lightDirection,
 			ImmutableArray<float> ambientLight, ImmutableArray<float> diffuseLight,
-			float colorPaletteTextureIndex, float normalsPaletteTextureIndex)
+			float colorPaletteTextureIndex, float normalsPaletteTextureIndex,
+			bool fullBrightOnly, int fullBrightStartIndex, int fullBrightEndIndex,
+			int fullBrightStartIndex2, int fullBrightEndIndex2)
 		{
 			Shader.SetTexture("DiffuseTexture", renderData.Sheet.GetTexture());
 			Shader.SetVec("Palettes", colorPaletteTextureIndex, normalsPaletteTextureIndex);
+			Shader.SetVec("FullBrightRange", fullBrightStartIndex, fullBrightEndIndex);
+			Shader.SetVec("FullBrightRange2", fullBrightStartIndex2, fullBrightEndIndex2);
+			Shader.SetVec("FullBrightOnly", fullBrightOnly ? 1 : 0);
 			Shader.SetMatrix("TransformMatrix", t);
 			Shader.SetVec("LightDirection", lightDirection, 4);
 			Shader.SetVec("AmbientLight", ambientLight.AsMemory(), 3);

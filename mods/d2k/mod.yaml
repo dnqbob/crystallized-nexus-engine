@@ -1,6 +1,6 @@
 Metadata:
 	Title: mod-title
-	Version: bleed
+	Version: cn-20260511
 	Website: https://www.openra.net
 	WebIcon32: https://www.openra.net/images/icons/d2k_32x32.png
 	WindowTitle: mod-windowtitle
@@ -37,7 +37,7 @@ FileSystem: ContentInstallerFileSystem
 
 MapFolders:
 	d2k|maps: System
-	~^SupportDir|maps/d2k/bleed: User
+	~^SupportDir|maps/d2k/cn-20260511: User
 
 Rules:
 	d2k|rules/misc.yaml

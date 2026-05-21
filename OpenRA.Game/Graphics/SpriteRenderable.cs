@@ -23,9 +23,10 @@ namespace OpenRA.Graphics
 		readonly float scale;
 		readonly WAngle rotation = WAngle.Zero;
 		readonly bool flipY;
+		readonly uint fullBrightPaletteRanges;
 
 		public SpriteRenderable(Sprite sprite, WPos pos, WVec offset, int zOffset, PaletteReference palette, float scale, float alpha,
-			float3 tint, TintModifiers tintModifiers, bool isDecoration, WAngle rotation, bool flipY = false)
+			float3 tint, TintModifiers tintModifiers, bool isDecoration, WAngle rotation, bool flipY = false, uint fullBrightPaletteRanges = 0)
 		{
 			this.sprite = sprite;
 			this.pos = pos;
@@ -35,6 +36,7 @@ namespace OpenRA.Graphics
 			this.scale = scale;
 			this.rotation = rotation;
 			this.flipY = flipY;
+			this.fullBrightPaletteRanges = fullBrightPaletteRanges;
 			Tint = tint;
 			IsDecoration = isDecoration;
 			TintModifiers = tintModifiers;
@@ -63,37 +65,43 @@ namespace OpenRA.Graphics
 
 		public IPalettedRenderable WithPalette(PaletteReference newPalette)
 		{
-			return new SpriteRenderable(sprite, pos, Offset, ZOffset, newPalette, scale, Alpha, Tint, TintModifiers, IsDecoration, rotation, flipY);
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, newPalette, scale, Alpha, Tint, TintModifiers, IsDecoration, rotation, flipY, fullBrightPaletteRanges);
 		}
 
 		public IRenderable WithZOffset(int newOffset)
 		{
-			return new SpriteRenderable(sprite, pos, Offset, newOffset, Palette, scale, Alpha, Tint, TintModifiers, IsDecoration, rotation, flipY);
+			return new SpriteRenderable(sprite, pos, Offset, newOffset, Palette, scale, Alpha, Tint, TintModifiers, IsDecoration, rotation, flipY, fullBrightPaletteRanges);
 		}
 
 		public IRenderable OffsetBy(in WVec vec)
 		{
-			return new SpriteRenderable(sprite, pos + vec, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers, IsDecoration, rotation, flipY);
+			return new SpriteRenderable(sprite, pos + vec, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers, IsDecoration, rotation, flipY, fullBrightPaletteRanges);
 		}
 
 		public IRenderable AsDecoration()
 		{
-			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers, true, rotation, flipY);
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers, true, rotation, flipY, fullBrightPaletteRanges);
 		}
 
 		public IModifyableRenderable WithAlpha(float newAlpha)
 		{
-			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, newAlpha, Tint, TintModifiers, IsDecoration, rotation, flipY);
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, newAlpha, Tint, TintModifiers, IsDecoration, rotation, flipY, fullBrightPaletteRanges);
 		}
 
 		public IModifyableRenderable WithTint(in float3 newTint, TintModifiers newTintModifiers)
 		{
-			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, newTint, newTintModifiers, IsDecoration, rotation, flipY);
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, newTint, newTintModifiers, IsDecoration, rotation, flipY, fullBrightPaletteRanges);
 		}
 
 		public SpriteRenderable WithYFlip()
 		{
-			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers, IsDecoration, rotation, true);
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers, IsDecoration, rotation, true, fullBrightPaletteRanges);
+		}
+
+		public SpriteRenderable WithFullBrightOnly(uint paletteRanges)
+		{
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint,
+				TintModifiers | TintModifiers.IgnoreWorldTint, IsDecoration, rotation, flipY, paletteRanges);
 		}
 
 		float3 ScreenPosition(WorldRenderer wr)
@@ -106,8 +114,9 @@ namespace OpenRA.Graphics
 		public void Render(WorldRenderer wr)
 		{
 			var wsr = Game.Renderer.WorldSpriteRenderer;
+			var ignoreWorldTint = (TintModifiers & TintModifiers.IgnoreWorldTint) != 0;
 			var t = Alpha * Tint;
-			if (wr.TerrainLighting != null && (TintModifiers & TintModifiers.IgnoreWorldTint) == 0)
+			if (wr.TerrainLighting != null && !ignoreWorldTint)
 				t *= wr.TerrainLighting.TintAt(pos);
 
 			// Shader interprets negative alpha as a flag to use the tint colour directly instead of multiplying the sprite colour
@@ -117,9 +126,9 @@ namespace OpenRA.Graphics
 
 			if (flipY)
 				wsr.DrawSprite(sprite, Palette, ScreenPosition(wr) + new float3(0, scale * sprite.Size.Y, 0),
-					new float3(scale, -scale, scale), t, a, rotation.RendererRadians());
+					new float3(scale, -scale, scale), t, a, rotation.RendererRadians(), ignoreWorldTint, fullBrightPaletteRanges);
 			else
-				wsr.DrawSprite(sprite, Palette, ScreenPosition(wr), scale, t, a, rotation.RendererRadians());
+				wsr.DrawSprite(sprite, Palette, ScreenPosition(wr), scale, t, a, rotation.RendererRadians(), ignoreWorldTint, fullBrightPaletteRanges);
 		}
 
 		public void RenderDebugGeometry(WorldRenderer wr)
