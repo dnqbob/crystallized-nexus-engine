@@ -79,6 +79,24 @@ namespace OpenRA.Mods.Common.Projectiles
 		[Desc("Beam color is the player's color.")]
 		public readonly bool UsePlayerColor = false;
 
+		[Desc("Fraction of the beam width used to fade out the visual beam edges. 0 keeps hard edges.")]
+		public readonly float BeamEdgeSoftness = 0f;
+
+		[Desc("Maximum screenspace distortion in pixels. 0 disables the refraction effect.")]
+		public readonly float Distortion = 0f;
+
+		[Desc("Width of the distortion effect. 0 uses Width.")]
+		public readonly WDist DistortionWidth = WDist.Zero;
+
+		[Desc("Spatial frequency of the distortion wave along the beam.")]
+		public readonly float DistortionWaveScale = 28f;
+
+		[Desc("Animation speed of the distortion wave.")]
+		public readonly float DistortionWaveSpeed = 0.18f;
+
+		[Desc("Fraction of the distortion width used to fade out the beam edges.")]
+		public readonly float DistortionEdgeSoftness = 0.45f;
+
 		public IProjectile Create(ProjectileArgs args)
 		{
 			var c = UsePlayerColor ? args.SourceActor.OwnerColor() : Color;
@@ -91,6 +109,7 @@ namespace OpenRA.Mods.Common.Projectiles
 		readonly AreaBeamInfo info;
 		readonly ProjectileArgs args;
 		readonly AttackBase actorAttackBase;
+		readonly AreaBeamDistortionRenderer distortionRenderer;
 		readonly Color color;
 		readonly WDist speed;
 		readonly WDist weaponRange;
@@ -122,6 +141,9 @@ namespace OpenRA.Mods.Common.Projectiles
 			actorAttackBase = args.SourceActor.Trait<AttackBase>();
 
 			var world = args.SourceActor.World;
+			if (info.Distortion > 0f)
+				distortionRenderer = world.WorldActor.TraitOrDefault<AreaBeamDistortionRenderer>();
+
 			if (info.Speed.Length > 1)
 				speed = new WDist(world.SharedRandom.Next(info.Speed[0].Length, info.Speed[1].Length));
 			else
@@ -272,7 +294,16 @@ namespace OpenRA.Mods.Common.Projectiles
 		{
 			if (!IsBeamComplete && info.RenderBeam && !(wr.World.FogObscures(tailPos) && wr.World.FogObscures(headPos)))
 			{
-				var beamRender = new BeamRenderable(headPos, info.ZOffset, tailPos - headPos, info.Shape, info.Width, color);
+				var beamRender = new BeamRenderable(headPos, info.ZOffset, tailPos - headPos, info.Shape, info.Width, color, info.BeamEdgeSoftness);
+				if (distortionRenderer != null)
+				{
+					var distortionWidth = info.DistortionWidth.Length > 0 ? info.DistortionWidth : info.Width;
+					var distortionRender = new AreaBeamDistortionRenderable(distortionRenderer, headPos, info.ZOffset, tailPos - headPos,
+						distortionWidth, info.Shape, info.Width, color, info.BeamEdgeSoftness, info.Distortion,
+						info.DistortionWaveScale, info.DistortionWaveSpeed, info.DistortionEdgeSoftness);
+					return [distortionRender];
+				}
+
 				return [beamRender];
 			}
 

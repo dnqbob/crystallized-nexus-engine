@@ -193,6 +193,19 @@ Container@DISPLAY_PANEL:
 									Text: checkbox-tiberium-effects-container
 				Container@ROW:
 					Width: PARENT_WIDTH - 24
+					Height: 20
+					Children:
+						Container@BLOOM_GLOW_CHECKBOX_CONTAINER:
+							X: 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Checkbox@BLOOM_GLOW_CHECKBOX:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Regular
+									Text: checkbox-bloom-glow-container
+				Container@ROW:
+					Width: PARENT_WIDTH - 24
 					Height: 50
 					Children:
 						Container@GRADING_DROPDOWN_CONTAINER:

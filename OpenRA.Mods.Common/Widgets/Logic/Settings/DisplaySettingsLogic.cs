@@ -68,6 +68,15 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		[FluentReference]
 		const string Disabled = "options-target-lines.disabled";
 
+		[FluentReference]
+		const string GradingOff = "options-atmosphere.off";
+
+		[FluentReference]
+		const string GradingCinematic = "options-atmosphere.cinematic";
+
+		[FluentReference]
+		const string GradingToxHaze = "options-atmosphere.tox-haze";
+
 		[FluentReference("fps")]
 		const string FrameLimiter = "checkbox-frame-limiter";
 
@@ -97,6 +106,9 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		readonly string automatic;
 		readonly string manual;
 		readonly string disabled;
+		readonly string gradingOff;
+		readonly string gradingCinematic;
+		readonly string gradingToxHaze;
 
 		readonly string legacyFullscreen;
 		readonly string fullscreen;
@@ -124,6 +136,10 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			automatic = FluentProvider.GetMessage(Automatic);
 			manual = FluentProvider.GetMessage(Manual);
 			disabled = FluentProvider.GetMessage(Disabled);
+
+			gradingOff = FluentProvider.GetMessage(GradingOff);
+			gradingCinematic = FluentProvider.GetMessage(GradingCinematic);
+			gradingToxHaze = FluentProvider.GetMessage(GradingToxHaze);
 		}
 
 		public static string GetViewportSizeName(ModData modData, WorldViewport worldViewport)
@@ -150,6 +166,8 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 
 			SettingsUtils.BindCheckboxPref(panel, "WATER_EFFECTS_CHECKBOX", graphicSettings, "WaterEffects");
 			SettingsUtils.BindCheckboxPref(panel, "CLOUD_SHADOWS_CHECKBOX", graphicSettings, "CloudShadows");
+			SettingsUtils.BindCheckboxPref(panel, "TIBERIUM_EFFECTS_CHECKBOX", graphicSettings, "TiberiumEffects");
+			SettingsUtils.BindCheckboxPref(panel, "BLOOM_GLOW_CHECKBOX", graphicSettings, "BloomGlowEffects");
 			SettingsUtils.BindCheckboxPref(panel, "VOXEL_DYNAMICS_CHECKBOX", graphicSettings, "VoxelDynamics");
 			SettingsUtils.BindCheckboxPref(panel, "CURSORDOUBLE_CHECKBOX", graphicSettings, "CursorDouble");
 			SettingsUtils.BindCheckboxPref(panel, "VSYNC_CHECKBOX", graphicSettings, "VSync");
@@ -208,6 +226,14 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			var battlefieldCameraLabel = new CachedTransform<WorldViewport, string>(vs => GetViewportSizeName(modData, vs));
 			battlefieldCameraDropDown.OnMouseDown = _ => ShowBattlefieldCameraDropdown(modData, battlefieldCameraDropDown, viewportSizes, graphicSettings);
 			battlefieldCameraDropDown.GetText = () => battlefieldCameraLabel.Update(graphicSettings.ViewportDistance);
+
+			var gradingDropdown = panel.Get<DropDownButtonWidget>("GRADING_DROPDOWN");
+			gradingDropdown.OnMouseDown = _ => ShowGradingDropdown(gradingDropdown, graphicSettings);
+			gradingDropdown.GetText = () => graphicSettings.PostProcessGrading == GradingMode.Off
+				? gradingOff
+				: graphicSettings.PostProcessGrading == GradingMode.ToxHaze
+					? gradingToxHaze
+					: gradingCinematic;
 
 			BindTextNotificationPoolFilterSettings(panel, gameSettings);
 
@@ -466,6 +492,28 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				var item = ScrollItemWidget.Setup(itemTemplate,
 					() => gameSettings.TargetLines == options[o],
 					() => gameSettings.TargetLines = options[o]);
+
+				item.Get<LabelWidget>("LABEL").GetText = () => o;
+				return item;
+			}
+
+			dropdown.ShowDropDown("LABEL_DROPDOWN_TEMPLATE", 500, options.Keys, SetupItem);
+		}
+
+		static void ShowGradingDropdown(DropDownButtonWidget dropdown, GraphicSettings graphicSettings)
+		{
+			var options = new Dictionary<string, GradingMode>()
+			{
+				{ FluentProvider.GetMessage(GradingOff), GradingMode.Off },
+				{ FluentProvider.GetMessage(GradingCinematic), GradingMode.Cinematic },
+				{ FluentProvider.GetMessage(GradingToxHaze), GradingMode.ToxHaze },
+			};
+
+			ScrollItemWidget SetupItem(string o, ScrollItemWidget itemTemplate)
+			{
+				var item = ScrollItemWidget.Setup(itemTemplate,
+					() => graphicSettings.PostProcessGrading == options[o],
+					() => graphicSettings.PostProcessGrading = options[o]);
 
 				item.Get<LabelWidget>("LABEL").GetText = () => o;
 				return item;

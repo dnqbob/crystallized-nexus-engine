@@ -88,6 +88,8 @@ namespace OpenRA.Platforms.Default
 			{
 				OpenGL.glBindFragDataLocation(program, 0, "fragColor");
 				OpenGL.CheckGLError();
+				OpenGL.glBindFragDataLocation(program, 1, "shadowColor");
+				OpenGL.CheckGLError();
 			}
 
 			OpenGL.glAttachShader(program, vertexShader);

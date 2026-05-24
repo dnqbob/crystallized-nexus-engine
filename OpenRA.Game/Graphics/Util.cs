@@ -33,7 +33,8 @@ namespace OpenRA.Graphics
 		}
 
 		public static void FastCreateQuad(Vertex[] vertices, in float3 o, Sprite r, int2 samplers, int paletteTextureIndex, int nv,
-			in float3 size, in float3 tint, float alpha, float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0)
+			in float3 size, in float3 tint, float alpha, float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0,
+			bool isBloomSource = false, float bloomIntensity = 1f)
 		{
 			float3 a, b, c, d;
 
@@ -69,13 +70,15 @@ namespace OpenRA.Graphics
 				d = new float3(o.X, o.Y + size.Y, o.Z + size.Z);
 			}
 
-			FastCreateQuad(vertices, a, b, c, d, r, samplers, paletteTextureIndex, tint, alpha, nv, ignoreWorldTint, fullBrightPaletteRanges);
+			FastCreateQuad(vertices, a, b, c, d, r, samplers, paletteTextureIndex, tint, alpha, nv, ignoreWorldTint,
+				fullBrightPaletteRanges, isBloomSource, bloomIntensity);
 		}
 
 		public static void FastCreateQuad(Vertex[] vertices,
 			in float3 a, in float3 b, in float3 c, in float3 d,
 			Sprite r, int2 samplers, int paletteTextureIndex,
-			in float3 tint, float alpha, int nv, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0)
+			in float3 tint, float alpha, int nv, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0,
+			bool isBloomSource = false, float bloomIntensity = 1f)
 		{
 			float sl = 0;
 			float st = 0;
@@ -96,6 +99,11 @@ namespace OpenRA.Graphics
 				attribC |= samplers.Y << 9;
 			}
 
+			// Palette row in bits 16-31 (classic layout - palette row LSB at
+			// bit 16). Shifting palette row up to bits 17+ to free bit 16 for
+			// BloomGlow caused voxels to vanish during the dig animation
+			// (subtle GLSL/driver issue with the higher-shifted layout); we
+			// keep the classic layout and use bit 14 for BloomGlow instead.
 			attribC |= (paletteTextureIndex & 0xFFFF) << 16;
 
 			// Bit 12 (free in the attribute bitfield) flags geometry that ignores
@@ -105,12 +113,18 @@ namespace OpenRA.Graphics
 				attribC |= 0x1000;
 			if (fullBrightPaletteRanges != 0)
 				attribC |= 0x2000;
+			if (isBloomSource)
+				attribC |= 0x4000;
 
 			var uAttribC = (uint)attribC;
-			vertices[nv] = new Vertex(a.X, a.Y, a.Z, r.Left, r.Top, sl, st, uAttribC, tint.X, tint.Y, tint.Z, alpha, fullBrightPaletteRanges);
-			vertices[nv + 1] = new Vertex(b.X, b.Y, b.Z, r.Right, r.Top, sr, st, uAttribC, tint.X, tint.Y, tint.Z, alpha, fullBrightPaletteRanges);
-			vertices[nv + 2] = new Vertex(c.X, c.Y, c.Z, r.Right, r.Bottom, sr, sb, uAttribC, tint.X, tint.Y, tint.Z, alpha, fullBrightPaletteRanges);
-			vertices[nv + 3] = new Vertex(d.X, d.Y, d.Z, r.Left, r.Bottom, sl, sb, uAttribC, tint.X, tint.Y, tint.Z, alpha, fullBrightPaletteRanges);
+			vertices[nv] = new Vertex(a.X, a.Y, a.Z, r.Left, r.Top, sl, st, uAttribC, tint.X, tint.Y, tint.Z, alpha,
+				fullBrightPaletteRanges, bloomIntensity);
+			vertices[nv + 1] = new Vertex(b.X, b.Y, b.Z, r.Right, r.Top, sr, st, uAttribC, tint.X, tint.Y, tint.Z, alpha,
+				fullBrightPaletteRanges, bloomIntensity);
+			vertices[nv + 2] = new Vertex(c.X, c.Y, c.Z, r.Right, r.Bottom, sr, sb, uAttribC, tint.X, tint.Y, tint.Z, alpha,
+				fullBrightPaletteRanges, bloomIntensity);
+			vertices[nv + 3] = new Vertex(d.X, d.Y, d.Z, r.Left, r.Bottom, sl, sb, uAttribC, tint.X, tint.Y, tint.Z, alpha,
+				fullBrightPaletteRanges, bloomIntensity);
 		}
 
 		public static void FastCopyIntoChannel(Sprite dest, byte[] src, SpriteFrameType srcType, bool premultiplied = false)

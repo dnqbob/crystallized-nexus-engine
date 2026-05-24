@@ -46,6 +46,9 @@ namespace OpenRA.Mods.Common.Traits.Render
 		[Desc("Palette index ranges to render as an un-tinted overlay for this actor. Example: 1, 15, 240, 255.")]
 		public readonly int2[] FullBrightPaletteIndexRanges = [];
 
+		[Desc("Bloom multiplier for the full-bright overlay. 0 disables bloom while keeping the overlay visible; 1 is default.")]
+		public readonly float BloomGlowIntensity = 1f;
+
 		public uint FullBrightPaletteRangeMask { get; private set; }
 
 		public override object Create(ActorInitializer init) { return new RenderSprites(init, this); }
@@ -60,6 +63,9 @@ namespace OpenRA.Mods.Common.Traits.Render
 				if (range.X < 0 || range.X > 255 || range.Y < 0 || range.Y > 255 || range.Y < range.X)
 					throw new YamlException($"{nameof(FullBrightPaletteIndexRanges)} must use valid ranges between 0 and 255.");
 			}
+
+			if (BloomGlowIntensity < 0f)
+				throw new YamlException($"{nameof(BloomGlowIntensity)} must be greater than or equal to 0.");
 
 			FullBrightPaletteRangeMask = PackFullBrightPaletteRanges(FullBrightPaletteIndexRanges);
 		}
@@ -189,7 +195,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		{
 			Info = info;
 			faction = init.GetValue<FactionInit, string>(init.Self.Owner.Faction.InternalName);
-			renderables = RenderAnimations(anims, init.Self, info.FullBrightPaletteRangeMask);
+			renderables = RenderAnimations(anims, init.Self, info.FullBrightPaletteRangeMask, info.BloomGlowIntensity);
 		}
 
 		public string GetImage(Actor self)
@@ -228,7 +234,8 @@ namespace OpenRA.Mods.Common.Traits.Render
 			return renderables;
 		}
 
-		static IEnumerable<IRenderable> RenderAnimations(List<AnimationWrapper> anims, Actor self, uint fullBrightPaletteRanges)
+		static IEnumerable<IRenderable> RenderAnimations(List<AnimationWrapper> anims, Actor self, uint fullBrightPaletteRanges,
+			float bloomGlowIntensity)
 		{
 			foreach (var a in anims)
 			{
@@ -240,7 +247,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 					yield return r;
 
 					if (fullBrightPaletteRanges != 0 && r is SpriteRenderable sr)
-						yield return sr.WithFullBrightOnly(fullBrightPaletteRanges);
+						yield return sr.WithFullBrightOnly(fullBrightPaletteRanges, bloomGlowIntensity);
 				}
 			}
 		}

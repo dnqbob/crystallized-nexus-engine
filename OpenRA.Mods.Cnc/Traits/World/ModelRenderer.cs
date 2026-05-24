@@ -194,11 +194,10 @@ namespace OpenRA.Mods.Cnc.Traits
 
 			sheetBuilderForFrame ??= new SheetBuilder(SheetType.BGRA, AllocateSheet);
 
-			var sprite = sheetBuilderForFrame.Allocate(spriteSize, 0, spriteOffset);
-			var shadowSprite = sheetBuilderForFrame.Allocate(shadowSpriteSize, 0, shadowSpriteOffset);
 			var renderFullBright = (fullBrightStartIndex >= 0 && fullBrightEndIndex >= fullBrightStartIndex) ||
 				(fullBrightStartIndex2 >= 0 && fullBrightEndIndex2 >= fullBrightStartIndex2);
-			var fullBrightSprite = renderFullBright ? sheetBuilderForFrame.Allocate(spriteSize, 0, spriteOffset) : null;
+			AllocateRenderSprites(spriteSize, spriteOffset, shadowSpriteSize, shadowSpriteOffset, renderFullBright,
+				out var sprite, out var shadowSprite, out var fullBrightSprite);
 			var sb = sprite.Bounds;
 			var ssb = shadowSprite.Bounds;
 			var spriteCenter = new float2(sb.Left + sb.Width / 2, sb.Top + sb.Height / 2);
@@ -275,6 +274,25 @@ namespace OpenRA.Mods.Cnc.Traits
 			var screenLightVector = Util.MatrixVectorMultiply(invShadowTransform, ZVector);
 			screenLightVector = Util.MatrixVectorMultiply(cameraTransform, screenLightVector);
 			return new ModelRenderProxy(sprite, shadowSprite, fullBrightSprite, screenCorners, -screenLightVector[2] / screenLightVector[1]);
+		}
+
+		void AllocateRenderSprites(Size spriteSize, in float3 spriteOffset, Size shadowSpriteSize, in float3 shadowSpriteOffset,
+			bool renderFullBright, out Sprite sprite, out Sprite shadowSprite, out Sprite fullBrightSprite)
+		{
+			sprite = sheetBuilderForFrame.Allocate(spriteSize, 0, spriteOffset);
+			shadowSprite = sheetBuilderForFrame.Allocate(shadowSpriteSize, 0, shadowSpriteOffset);
+			fullBrightSprite = renderFullBright ? sheetBuilderForFrame.Allocate(spriteSize, 0, spriteOffset) : null;
+
+			if (shadowSprite.Sheet == sprite.Sheet && (fullBrightSprite == null || fullBrightSprite.Sheet == sprite.Sheet))
+				return;
+
+			sheetBuilderForFrame.StartNewSheet();
+			sprite = sheetBuilderForFrame.Allocate(spriteSize, 0, spriteOffset);
+			shadowSprite = sheetBuilderForFrame.Allocate(shadowSpriteSize, 0, shadowSpriteOffset);
+			fullBrightSprite = renderFullBright ? sheetBuilderForFrame.Allocate(spriteSize, 0, spriteOffset) : null;
+
+			if (shadowSprite.Sheet != sprite.Sheet || (fullBrightSprite != null && fullBrightSprite.Sheet != sprite.Sheet))
+				throw new SheetOverflowException("Model render sprite, shadow and full-bright overlay must fit on the same sheet.");
 		}
 
 		static void CalculateSpriteGeometry(float2 tl, float2 br, float scale, out Size size, out int2 offset)

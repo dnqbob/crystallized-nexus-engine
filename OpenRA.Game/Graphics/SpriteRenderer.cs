@@ -194,33 +194,39 @@ namespace OpenRA.Graphics
 		}
 
 		internal void DrawSprite(Sprite s, int paletteTextureIndex, in float3 location, float scale, in float3 tint, float alpha,
-			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0)
+			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0, bool isBloomSource = false,
+			float bloomIntensity = 1f)
 		{
 			var samplers = SetRenderStateForSprite(s);
 			Util.FastCreateQuad(vertices, location + scale * s.Offset, s, samplers, paletteTextureIndex, vertexCount, scale * s.Size, tint, alpha,
-								rotation, ignoreWorldTint, fullBrightPaletteRanges);
+								rotation, ignoreWorldTint, fullBrightPaletteRanges, isBloomSource, bloomIntensity);
 			vertexCount += 4;
 		}
 
 		internal void DrawSprite(Sprite s, PaletteReference pal, in float3 location, in float3 scale, in float3 tint, float alpha,
-			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0)
+			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0, bool isBloomSource = false,
+			float bloomIntensity = 1f)
 		{
 			var samplers = SetRenderStateForSprite(s);
 			Util.FastCreateQuad(vertices, location + scale * s.Offset, s, samplers, ResolveTextureIndex(s, pal), vertexCount, scale * s.Size, tint, alpha,
-								rotation, ignoreWorldTint, fullBrightPaletteRanges);
+								rotation, ignoreWorldTint, fullBrightPaletteRanges, isBloomSource, bloomIntensity);
 			vertexCount += 4;
 		}
 
 		public void DrawSprite(Sprite s, PaletteReference pal, in float3 location, float scale, in float3 tint, float alpha,
-			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0)
+			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0, bool isBloomSource = false,
+			float bloomIntensity = 1f)
 		{
-			DrawSprite(s, ResolveTextureIndex(s, pal), location, scale, tint, alpha, rotation, ignoreWorldTint, fullBrightPaletteRanges);
+			DrawSprite(s, ResolveTextureIndex(s, pal), location, scale, tint, alpha, rotation, ignoreWorldTint, fullBrightPaletteRanges, isBloomSource,
+				bloomIntensity);
 		}
 
-		internal void DrawSprite(Sprite s, int paletteTextureIndex, in float3 a, in float3 b, in float3 c, in float3 d, in float3 tint, float alpha)
+		internal void DrawSprite(Sprite s, int paletteTextureIndex, in float3 a, in float3 b, in float3 c, in float3 d, in float3 tint, float alpha,
+			bool isBloomSource = false, float bloomIntensity = 1f)
 		{
 			var samplers = SetRenderStateForSprite(s);
-			Util.FastCreateQuad(vertices, a, b, c, d, s, samplers, paletteTextureIndex, tint, alpha, vertexCount);
+			Util.FastCreateQuad(vertices, a, b, c, d, s, samplers, paletteTextureIndex, tint, alpha, vertexCount,
+				isBloomSource: isBloomSource, bloomIntensity: bloomIntensity);
 			vertexCount += 4;
 		}
 
@@ -324,6 +330,14 @@ namespace OpenRA.Graphics
 		{
 			Shader.SetBool("EnableDepthPreview", enabled);
 			Shader.SetVec("DepthPreviewParams", contrast, offset);
+		}
+
+		// Glow extract pass toggle: when true, the combined shader keeps only
+		// full-bright palette fragments or explicitly marked BloomGlow sprites.
+		// Used by Renderer.RenderGlowBloom() to populate the glow FBO.
+		public void SetGlowExtractParams(bool extractOnly)
+		{
+			Shader.SetBool("GlowExtractOnly", extractOnly);
 		}
 
 		public void EnablePixelArtScaling(bool enabled)

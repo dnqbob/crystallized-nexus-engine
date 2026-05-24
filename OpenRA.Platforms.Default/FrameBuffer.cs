@@ -19,13 +19,18 @@ namespace OpenRA.Platforms.Default
 	sealed class FrameBuffer : ThreadAffine, IFrameBuffer
 	{
 		readonly ITexture texture;
+		readonly ITexture secondaryTexture;
 		readonly Size size;
 		readonly Color clearColor;
+		readonly int[] drawBuffers;
 		uint framebuffer, depth;
 		bool disposed;
 		bool scissored;
 
 		public FrameBuffer(Size size, ITextureInternal texture, Color clearColor)
+			: this(size, texture, null, clearColor) { }
+
+		public FrameBuffer(Size size, ITextureInternal texture, ITextureInternal secondaryTexture, Color clearColor)
 		{
 			this.size = size;
 			this.clearColor = clearColor;
@@ -41,6 +46,20 @@ namespace OpenRA.Platforms.Default
 			this.texture = texture;
 			texture.SetEmpty(size.Width, size.Height);
 			OpenGL.glFramebufferTexture2D(OpenGL.GL_FRAMEBUFFER, OpenGL.GL_COLOR_ATTACHMENT0, OpenGL.GL_TEXTURE_2D, texture.ID, 0);
+			OpenGL.CheckGLError();
+
+			if (secondaryTexture != null)
+			{
+				this.secondaryTexture = secondaryTexture;
+				secondaryTexture.SetEmpty(size.Width, size.Height);
+				OpenGL.glFramebufferTexture2D(OpenGL.GL_FRAMEBUFFER, OpenGL.GL_COLOR_ATTACHMENT1, OpenGL.GL_TEXTURE_2D, secondaryTexture.ID, 0);
+				OpenGL.CheckGLError();
+				drawBuffers = [OpenGL.GL_COLOR_ATTACHMENT0, OpenGL.GL_COLOR_ATTACHMENT1];
+			}
+			else
+				drawBuffers = [OpenGL.GL_COLOR_ATTACHMENT0];
+
+			OpenGL.glDrawBuffers(drawBuffers.Length, drawBuffers);
 			OpenGL.CheckGLError();
 
 			// Depth
@@ -82,6 +101,16 @@ namespace OpenRA.Platforms.Default
 		int[] cv = new int[4];
 		public void Bind()
 		{
+			BindInternal(clear: true);
+		}
+
+		public void BindNoClear()
+		{
+			BindInternal(clear: false);
+		}
+
+		void BindInternal(bool clear)
+		{
 			VerifyThreadAffinity();
 
 			// Cache viewport rect to restore when unbinding
@@ -91,12 +120,17 @@ namespace OpenRA.Platforms.Default
 			OpenGL.CheckGLError();
 			OpenGL.glBindFramebuffer(OpenGL.GL_FRAMEBUFFER, framebuffer);
 			OpenGL.CheckGLError();
+			OpenGL.glDrawBuffers(drawBuffers.Length, drawBuffers);
+			OpenGL.CheckGLError();
 			OpenGL.glViewport(0, 0, size.Width, size.Height);
 			OpenGL.CheckGLError();
-			OpenGL.glClearColor(clearColor.R, clearColor.G, clearColor.B, clearColor.A);
-			OpenGL.CheckGLError();
-			OpenGL.glClear(OpenGL.GL_COLOR_BUFFER_BIT | OpenGL.GL_DEPTH_BUFFER_BIT);
-			OpenGL.CheckGLError();
+			if (clear)
+			{
+				OpenGL.glClearColor(clearColor.R, clearColor.G, clearColor.B, clearColor.A);
+				OpenGL.CheckGLError();
+				OpenGL.glClear(OpenGL.GL_COLOR_BUFFER_BIT | OpenGL.GL_DEPTH_BUFFER_BIT);
+				OpenGL.CheckGLError();
+			}
 		}
 
 		public void Unbind()
@@ -141,12 +175,22 @@ namespace OpenRA.Platforms.Default
 			}
 		}
 
+		public ITexture SecondaryTexture
+		{
+			get
+			{
+				VerifyThreadAffinity();
+				return secondaryTexture;
+			}
+		}
+
 		public void Dispose()
 		{
 			if (disposed)
 				return;
 			disposed = true;
 			texture.Dispose();
+			secondaryTexture?.Dispose();
 
 			OpenGL.glDeleteFramebuffers(1, ref framebuffer);
 			OpenGL.CheckGLError();

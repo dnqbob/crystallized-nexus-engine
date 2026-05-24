@@ -293,6 +293,21 @@ namespace OpenRA.Graphics
 			for (var i = 0; i < preparedRenderables.Count; i++)
 				preparedRenderables[i].Render(this);
 
+			// Glow bloom (gated by a CN world trait through WorldTintState).
+			// Runs after the main actor pass so the world buffer is fully
+			// populated, then re-renders geometry with GlowExtractOnly into a
+			// dedicated FBO, blurs, and additively composites the halo back.
+			if (WorldTintState.BloomEnabled && Game.Settings.Graphics.BloomGlowEffects && WorldTintState.BloomStrength > 0f)
+			{
+				if (enableDepthBuffer)
+					Game.Renderer.Context.DisableDepthBuffer();
+
+				Game.Renderer.RenderGlowBloom(this, preparedRenderables, WorldTintState.BloomStrength);
+
+				if (enableDepthBuffer)
+					Game.Renderer.Context.EnableDepthBuffer(false);
+			}
+
 			if (enableDepthBuffer)
 				Game.Renderer.ClearDepthBuffer();
 
@@ -324,6 +339,9 @@ namespace OpenRA.Graphics
 			foreach (var g in groupedOverlayRenderables)
 				foreach (var r in g)
 					r.Render(this);
+
+			if (WorldTintState.BloomEnabled && Game.Settings.Graphics.BloomGlowEffects && WorldTintState.BloomStrength > 0f)
+				Game.Renderer.RenderGlowBloom(this, preparedOverlayRenderables, WorldTintState.BloomStrength);
 
 			ApplyPostProcessing(PostProcessPassType.AfterShroud);
 

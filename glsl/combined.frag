@@ -19,6 +19,13 @@ uniform vec2 DepthPreviewParams;
 uniform float DepthTextureScale;
 uniform bool EnablePixelArtScaling;
 
+// Glow extract pass: when set, the world is being rendered a second time into
+// a dedicated glow FBO. Every fragment that is NOT a full-bright palette pixel
+// is discarded; the surviving fragments are written in their pre-world-tint
+// colour so the downstream bloom blur reads a consistently "hot" image
+// regardless of time of day.
+uniform bool GlowExtractOnly;
+
 // Drifting cloud-shadow as part of the world tint. Darkens terrain + tinted
 // sprites, automatically skipped for IgnoreWorldTint geometry. Disabled when
 // CloudShadowAlpha == 0 (default), so behaviour is unchanged unless fed.
@@ -46,10 +53,18 @@ flat in uint vDepthSampler;
 in vec4 vTint;
 flat in float vIgnoreWorldTint;
 flat in float vFullBrightOnly;
+flat in float vBloomGlow;
+flat in float vBloomIntensity;
 flat in uint vFullBrightRanges;
 in vec2 vWorldPos;
 
+#ifdef GL_ES
+layout(location = 0) out vec4 fragColor;
+layout(location = 1) out vec4 shadowColor;
+#else
 out vec4 fragColor;
+out vec4 shadowColor;
+#endif
 
 float cloudHash(vec2 p)
 {
@@ -229,6 +244,7 @@ void main()
 	bool isColor = vChannelType == 0u;
 	bool fullBrightOnly = vFullBrightOnly > 0.5;
 	bool fullBright = false;
+	float paletteIndex = -1.0;
 
 	vec4 c;
 	if (EnablePixelArtScaling)
@@ -254,7 +270,7 @@ void main()
 	{
 		vec4 x = Sample(vChannelSampler, coords);
 		vec2 p = vec2(dot(x, vChannelMask), vTexPalette);
-		float paletteIndex = p.x * 255.0;
+		paletteIndex = p.x * 255.0;
 		fullBright = isPaletted && IsFullBrightPaletteIndex(paletteIndex);
 		if (isPaletted)
 			c = texture(Palette, p);
@@ -266,11 +282,18 @@ void main()
 	else
 	{
 		vec4 x = Sample(vChannelSampler, coords);
-		float paletteIndex = dot(x, vChannelMask) * 255.0;
+		paletteIndex = dot(x, vChannelMask) * 255.0;
 		fullBright = IsFullBrightPaletteIndex(paletteIndex);
 	}
 
 	if (fullBrightOnly && !fullBright)
+		discard;
+
+	// Glow extract keeps normal full-bright palette pixels and also allows
+	// explicitly marked BloomGlow renderables to contribute all non-transparent
+	// pixels. IgnoreWorldTint by itself does not opt sprites into bloom.
+	bool isGlowPixel = fullBright || vBloomGlow > 0.5;
+	if (GlowExtractOnly && !isGlowPixel)
 		discard;
 
 	// Discard any transparent fragments (both color and depth)
@@ -287,12 +310,29 @@ void main()
 		depth = depth + DepthTextureScale * dot(y, vDepthMask);
 	}
 
-	gl_FragDepth = depth;
-
 	if (EnableDepthPreview)
 	{
+		gl_FragDepth = depth;
 		float intensity = 1.0 - clamp(DepthPreviewParams.x * depth - 0.5 * DepthPreviewParams.x - DepthPreviewParams.y + 0.5, 0.0, 1.0);
 		fragColor = vec4(vec3(intensity), 1.0);
+		shadowColor = vec4(0.0);
+	}
+	else if (GlowExtractOnly)
+	{
+		// Glow extract pass: apply only the per-sprite tint (so player colours
+		// propagate) but skip world day-tint and cloud-shadow logic. The bloom
+		// must read a consistently bright source regardless of time of day; the
+		// time-of-day modulation is done in the composite.
+		if (vTint.a < 0.0)
+			c = vec4(vTint.rgb, -vTint.a);
+		else
+			c *= vTint;
+
+		c.rgb *= vBloomIntensity;
+
+		gl_FragDepth = depth;
+		fragColor = c;
+		shadowColor = vec4(0.0);
 	}
 	else
 	{
@@ -316,6 +356,8 @@ void main()
 				c.rgb *= WorldDayTint;
 		}
 
+		gl_FragDepth = depth;
 		fragColor = c;
+		shadowColor = vec4(0.0);
 	}
 }
