@@ -29,10 +29,11 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly float waveScale;
 		readonly float waveSpeed;
 		readonly float edgeSoftness;
+		readonly float beamBloomIntensity;
 
 		public AreaBeamDistortionRenderable(AreaBeamDistortionRenderer renderer, WPos pos, int zOffset, in WVec length,
 			WDist width, BeamRenderableShape shape, WDist beamWidth, Color color, float beamEdgeSoftness,
-			float distortion, float waveScale, float waveSpeed, float edgeSoftness)
+			float distortion, float waveScale, float waveSpeed, float edgeSoftness, float beamBloomIntensity = 1f)
 		{
 			this.renderer = renderer;
 			Pos = pos;
@@ -47,6 +48,7 @@ namespace OpenRA.Mods.Common.Graphics
 			this.waveScale = waveScale;
 			this.waveSpeed = waveSpeed;
 			this.edgeSoftness = edgeSoftness;
+			this.beamBloomIntensity = beamBloomIntensity;
 		}
 
 		public WPos Pos { get; }
@@ -56,13 +58,13 @@ namespace OpenRA.Mods.Common.Graphics
 		public IRenderable WithZOffset(int newOffset)
 		{
 			return new AreaBeamDistortionRenderable(renderer, Pos, newOffset, length, width, shape, beamWidth, color,
-				beamEdgeSoftness, distortion, waveScale, waveSpeed, edgeSoftness);
+				beamEdgeSoftness, distortion, waveScale, waveSpeed, edgeSoftness, beamBloomIntensity);
 		}
 
 		public IRenderable OffsetBy(in WVec vec)
 		{
 			return new AreaBeamDistortionRenderable(renderer, Pos + vec, ZOffset, length, width, shape, beamWidth, color,
-				beamEdgeSoftness, distortion, waveScale, waveSpeed, edgeSoftness);
+				beamEdgeSoftness, distortion, waveScale, waveSpeed, edgeSoftness, beamBloomIntensity);
 		}
 
 		public IRenderable AsDecoration() { return this; }
@@ -78,7 +80,7 @@ namespace OpenRA.Mods.Common.Graphics
 			var end = wr.Screen3DPxPosition(Pos + length);
 			var screenWidth = Math.Abs(wr.ScreenVector(new WVec(width, WDist.Zero, WDist.Zero))[0]);
 			renderer.Draw(start, end, screenWidth, distortion, waveScale, waveSpeed, edgeSoftness,
-				Pos, length, shape, beamWidth, color, beamEdgeSoftness);
+				Pos, length, shape, beamWidth, color, beamEdgeSoftness, beamBloomIntensity);
 		}
 
 		public void RenderDebugGeometry(WorldRenderer wr)

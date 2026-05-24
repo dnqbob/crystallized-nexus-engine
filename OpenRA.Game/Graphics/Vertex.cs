@@ -34,8 +34,8 @@ namespace OpenRA.Graphics
 		// Per-renderable bloom source multiplier
 		public readonly float BloomIntensity;
 
-		public Vertex(in float3 xyz, float s, float t, float u, float v, uint c)
-			: this(xyz.X, xyz.Y, xyz.Z, s, t, u, v, c, float3.Ones, 1f) { }
+		public Vertex(in float3 xyz, float s, float t, float u, float v, uint c, float bloomIntensity = 1f)
+			: this(xyz.X, xyz.Y, xyz.Z, s, t, u, v, c, 1f, 1f, 1f, 1f, 0u, bloomIntensity) { }
 
 		public Vertex(in float3 xyz, float s, float t, float u, float v, uint c, in float3 tint, float a)
 			: this(xyz.X, xyz.Y, xyz.Z, s, t, u, v, c, tint.X, tint.Y, tint.Z, a) { }

@@ -56,7 +56,7 @@ namespace OpenRA.Graphics
 		}
 
 		public void DrawLine(in float3 start, in float3 end, float width, Color color, BlendMode blendMode = BlendMode.Alpha,
-			bool ignoreWorldTint = false, bool isBloomSource = false)
+			bool ignoreWorldTint = false, bool isBloomSource = false, float bloomIntensity = 1f)
 		{
 			var delta = (end - start) / (end - start).XY.Length;
 			var corner = width / 2 * new float2(-delta.Y, delta.X);
@@ -68,10 +68,10 @@ namespace OpenRA.Graphics
 			var a = color.A / 255.0f;
 
 			var attribs = (ignoreWorldTint ? 0x1000u : 0u) | (isBloomSource ? 0x4000u : 0u);
-			vertices[0] = new Vertex(start - corner + Offset, r, g, b, a, attribs);
-			vertices[1] = new Vertex(start + corner + Offset, r, g, b, a, attribs);
-			vertices[2] = new Vertex(end + corner + Offset, r, g, b, a, attribs);
-			vertices[3] = new Vertex(end - corner + Offset, r, g, b, a, attribs);
+			vertices[0] = new Vertex(start - corner + Offset, r, g, b, a, attribs, bloomIntensity);
+			vertices[1] = new Vertex(start + corner + Offset, r, g, b, a, attribs, bloomIntensity);
+			vertices[2] = new Vertex(end + corner + Offset, r, g, b, a, attribs, bloomIntensity);
+			vertices[3] = new Vertex(end - corner + Offset, r, g, b, a, attribs, bloomIntensity);
 			parent.DrawRGBAQuad(vertices, blendMode);
 		}
 
@@ -217,7 +217,7 @@ namespace OpenRA.Graphics
 		}
 
 		public void FillRect(in float3 a, in float3 b, in float3 c, in float3 d, Color color, BlendMode blendMode = BlendMode.Alpha,
-			bool ignoreWorldTint = false, bool isBloomSource = false)
+			bool ignoreWorldTint = false, bool isBloomSource = false, float bloomIntensity = 1f)
 		{
 			color = Util.PremultiplyAlpha(color);
 			var cr = color.R / 255.0f;
@@ -226,27 +226,27 @@ namespace OpenRA.Graphics
 			var ca = color.A / 255.0f;
 
 			var attribs = (ignoreWorldTint ? 0x1000u : 0u) | (isBloomSource ? 0x4000u : 0u);
-			vertices[0] = new Vertex(a + Offset, cr, cg, cb, ca, attribs);
-			vertices[1] = new Vertex(b + Offset, cr, cg, cb, ca, attribs);
-			vertices[2] = new Vertex(c + Offset, cr, cg, cb, ca, attribs);
-			vertices[3] = new Vertex(d + Offset, cr, cg, cb, ca, attribs);
+			vertices[0] = new Vertex(a + Offset, cr, cg, cb, ca, attribs, bloomIntensity);
+			vertices[1] = new Vertex(b + Offset, cr, cg, cb, ca, attribs, bloomIntensity);
+			vertices[2] = new Vertex(c + Offset, cr, cg, cb, ca, attribs, bloomIntensity);
+			vertices[3] = new Vertex(d + Offset, cr, cg, cb, ca, attribs, bloomIntensity);
 			parent.DrawRGBAQuad(vertices, blendMode);
 		}
 
 		public void FillRect(in float3 a, in float3 b, in float3 c, in float3 d,
 			Color topLeftColor, Color topRightColor, Color bottomRightColor, Color bottomLeftColor, BlendMode blendMode = BlendMode.Alpha,
-			bool ignoreWorldTint = false, bool isBloomSource = false)
+			bool ignoreWorldTint = false, bool isBloomSource = false, float bloomIntensity = 1f)
 		{
 			var attribs = (ignoreWorldTint ? 0x1000u : 0u) | (isBloomSource ? 0x4000u : 0u);
-			vertices[0] = VertexWithColor(a + Offset, topLeftColor, attribs);
-			vertices[1] = VertexWithColor(b + Offset, topRightColor, attribs);
-			vertices[2] = VertexWithColor(c + Offset, bottomRightColor, attribs);
-			vertices[3] = VertexWithColor(d + Offset, bottomLeftColor, attribs);
+			vertices[0] = VertexWithColor(a + Offset, topLeftColor, attribs, bloomIntensity);
+			vertices[1] = VertexWithColor(b + Offset, topRightColor, attribs, bloomIntensity);
+			vertices[2] = VertexWithColor(c + Offset, bottomRightColor, attribs, bloomIntensity);
+			vertices[3] = VertexWithColor(d + Offset, bottomLeftColor, attribs, bloomIntensity);
 
 			parent.DrawRGBAQuad(vertices, blendMode);
 		}
 
-		static Vertex VertexWithColor(in float3 xyz, Color color, uint attribs = 0)
+		static Vertex VertexWithColor(in float3 xyz, Color color, uint attribs = 0, float bloomIntensity = 1f)
 		{
 			color = Util.PremultiplyAlpha(color);
 			var cr = color.R / 255.0f;
@@ -254,7 +254,7 @@ namespace OpenRA.Graphics
 			var cb = color.B / 255.0f;
 			var ca = color.A / 255.0f;
 
-			return new Vertex(xyz, cr, cg, cb, ca, attribs);
+			return new Vertex(xyz, cr, cg, cb, ca, attribs, bloomIntensity);
 		}
 
 		public void FillEllipse(in float3 tl, in float3 br, Color color, BlendMode blendMode = BlendMode.Alpha)

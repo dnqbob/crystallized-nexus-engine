@@ -82,6 +82,11 @@ namespace OpenRA.Mods.Common.Projectiles
 		[Desc("Fraction of the beam width used to fade out the visual beam edges. 0 keeps hard edges.")]
 		public readonly float BeamEdgeSoftness = 0f;
 
+		[Desc("Per-renderable bloom-source multiplier (only effective while BloomGlowEffects is active).",
+			"Default 1 = same strength as the global bloom; higher values make the beam push harder",
+			"into the glow buffer for a more visible halo.")]
+		public readonly float BeamBloomIntensity = 3f;
+
 		[Desc("Maximum screenspace distortion in pixels. 0 disables the refraction effect.")]
 		public readonly float Distortion = 0f;
 
@@ -294,13 +299,14 @@ namespace OpenRA.Mods.Common.Projectiles
 		{
 			if (!IsBeamComplete && info.RenderBeam && !(wr.World.FogObscures(tailPos) && wr.World.FogObscures(headPos)))
 			{
-				var beamRender = new BeamRenderable(headPos, info.ZOffset, tailPos - headPos, info.Shape, info.Width, color, info.BeamEdgeSoftness);
+				var beamRender = new BeamRenderable(headPos, info.ZOffset, tailPos - headPos, info.Shape, info.Width, color, info.BeamEdgeSoftness,
+					info.BeamBloomIntensity);
 				if (distortionRenderer != null)
 				{
 					var distortionWidth = info.DistortionWidth.Length > 0 ? info.DistortionWidth : info.Width;
 					var distortionRender = new AreaBeamDistortionRenderable(distortionRenderer, headPos, info.ZOffset, tailPos - headPos,
 						distortionWidth, info.Shape, info.Width, color, info.BeamEdgeSoftness, info.Distortion,
-						info.DistortionWaveScale, info.DistortionWaveSpeed, info.DistortionEdgeSoftness);
+						info.DistortionWaveScale, info.DistortionWaveSpeed, info.DistortionEdgeSoftness, info.BeamBloomIntensity);
 					return [distortionRender];
 				}
 

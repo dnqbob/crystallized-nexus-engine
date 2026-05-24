@@ -41,9 +41,11 @@ namespace OpenRA.Mods.Common.Traits
 			public readonly WDist BeamWidth;
 			public readonly Color BeamColor;
 			public readonly float BeamEdgeSoftness;
+			public readonly float BeamBloomIntensity;
 
 			public Beam(float3 start, float3 end, float width, float distortion, float waveScale, float waveSpeed, float edgeSoftness,
-				WPos beamPos, WVec beamLength, BeamRenderableShape beamShape, WDist beamWidth, Color beamColor, float beamEdgeSoftness)
+				WPos beamPos, WVec beamLength, BeamRenderableShape beamShape, WDist beamWidth, Color beamColor, float beamEdgeSoftness,
+				float beamBloomIntensity)
 			{
 				Start = start;
 				End = end;
@@ -58,6 +60,7 @@ namespace OpenRA.Mods.Common.Traits
 				BeamWidth = beamWidth;
 				BeamColor = beamColor;
 				BeamEdgeSoftness = beamEdgeSoftness;
+				BeamBloomIntensity = beamBloomIntensity;
 			}
 		}
 
@@ -76,13 +79,14 @@ namespace OpenRA.Mods.Common.Traits
 		}
 
 		public void Draw(float3 start, float3 end, float width, float distortion, float waveScale, float waveSpeed, float edgeSoftness,
-			WPos beamPos, WVec beamLength, BeamRenderableShape beamShape, WDist beamWidth, Color beamColor, float beamEdgeSoftness)
+			WPos beamPos, WVec beamLength, BeamRenderableShape beamShape, WDist beamWidth, Color beamColor, float beamEdgeSoftness,
+			float beamBloomIntensity)
 		{
 			if (distortion <= 0f || width <= 0f)
 				return;
 
 			var beam = new Beam(start, end, width, distortion, waveScale, waveSpeed, edgeSoftness,
-				beamPos, beamLength, beamShape, beamWidth, beamColor, beamEdgeSoftness);
+				beamPos, beamLength, beamShape, beamWidth, beamColor, beamEdgeSoftness, beamBloomIntensity);
 			foreach (var queuedBeam in beams)
 				if (SameBeam(queuedBeam, beam))
 					return;
@@ -95,7 +99,8 @@ namespace OpenRA.Mods.Common.Traits
 			return a.Start == b.Start && a.End == b.End && a.Width == b.Width && a.Distortion == b.Distortion &&
 				a.WaveScale == b.WaveScale && a.WaveSpeed == b.WaveSpeed && a.EdgeSoftness == b.EdgeSoftness &&
 				a.BeamPos == b.BeamPos && a.BeamLength == b.BeamLength && a.BeamShape == b.BeamShape &&
-				a.BeamWidth == b.BeamWidth && a.BeamColor == b.BeamColor && a.BeamEdgeSoftness == b.BeamEdgeSoftness;
+				a.BeamWidth == b.BeamWidth && a.BeamColor == b.BeamColor && a.BeamEdgeSoftness == b.BeamEdgeSoftness &&
+				a.BeamBloomIntensity == b.BeamBloomIntensity;
 		}
 
 		PostProcessPassType IRenderPostProcessPass.Type => PostProcessPassType.AfterWorld;
@@ -146,7 +151,7 @@ namespace OpenRA.Mods.Common.Traits
 			Game.Renderer.Flush();
 			foreach (var beam in beams)
 				new BeamRenderable(beam.BeamPos, 0, beam.BeamLength, beam.BeamShape, beam.BeamWidth,
-					beam.BeamColor, beam.BeamEdgeSoftness).Render(wr);
+					beam.BeamColor, beam.BeamEdgeSoftness, beam.BeamBloomIntensity).Render(wr);
 
 			beams.Clear();
 		}

@@ -23,9 +23,11 @@ namespace OpenRA.Mods.Common.Graphics
 		readonly WDist width;
 		readonly Color color;
 		readonly float edgeSoftness;
+		readonly float bloomIntensity;
 
 		public BeamRenderable(
-			WPos pos, int zOffset, in WVec length, BeamRenderableShape shape, WDist width, Color color, float edgeSoftness = 0f)
+			WPos pos, int zOffset, in WVec length, BeamRenderableShape shape, WDist width, Color color, float edgeSoftness = 0f,
+			float bloomIntensity = 1f)
 		{
 			Pos = pos;
 			ZOffset = zOffset;
@@ -34,6 +36,7 @@ namespace OpenRA.Mods.Common.Graphics
 			this.width = width;
 			this.color = color;
 			this.edgeSoftness = edgeSoftness;
+			this.bloomIntensity = bloomIntensity;
 		}
 
 		public WPos Pos { get; }
@@ -42,12 +45,12 @@ namespace OpenRA.Mods.Common.Graphics
 
 		public IRenderable WithZOffset(int newOffset)
 		{
-			return new BeamRenderable(Pos, newOffset, length, shape, width, color, edgeSoftness);
+			return new BeamRenderable(Pos, newOffset, length, shape, width, color, edgeSoftness, bloomIntensity);
 		}
 
 		public IRenderable OffsetBy(in WVec vec)
 		{
-			return new BeamRenderable(Pos + vec, ZOffset, length, shape, width, color, edgeSoftness);
+			return new BeamRenderable(Pos + vec, ZOffset, length, shape, width, color, edgeSoftness, bloomIntensity);
 		}
 
 		public IRenderable AsDecoration() { return this; }
@@ -69,9 +72,10 @@ namespace OpenRA.Mods.Common.Graphics
 				var d = wr.Screen3DPosition(Pos - corner + length);
 
 				if (edgeSoftness > 0f)
-					FillSoftBeam(a, b, c, d, color, edgeSoftness);
+					FillSoftBeam(a, b, c, d, color, edgeSoftness, bloomIntensity);
 				else
-					Game.Renderer.WorldRgbaColorRenderer.FillRect(a, b, c, d, color, ignoreWorldTint: true, isBloomSource: true);
+					Game.Renderer.WorldRgbaColorRenderer.FillRect(a, b, c, d, color,
+						ignoreWorldTint: true, isBloomSource: true, bloomIntensity: bloomIntensity);
 			}
 			else
 			{
@@ -80,13 +84,14 @@ namespace OpenRA.Mods.Common.Graphics
 				var screenWidth = wr.ScreenVector(new WVec(width, WDist.Zero, WDist.Zero))[0];
 
 				if (edgeSoftness > 0f)
-					DrawSoftLine(start, end, screenWidth, color, edgeSoftness);
+					DrawSoftLine(start, end, screenWidth, color, edgeSoftness, bloomIntensity);
 				else
-					Game.Renderer.WorldRgbaColorRenderer.DrawLine(start, end, screenWidth, color, ignoreWorldTint: true, isBloomSource: true);
+					Game.Renderer.WorldRgbaColorRenderer.DrawLine(start, end, screenWidth, color,
+						ignoreWorldTint: true, isBloomSource: true, bloomIntensity: bloomIntensity);
 			}
 		}
 
-		static void DrawSoftLine(in float3 start, in float3 end, float width, Color color, float edgeSoftness)
+		static void DrawSoftLine(in float3 start, in float3 end, float width, Color color, float edgeSoftness, float bloomIntensity)
 		{
 			var screenLength = (end - start).XY.Length;
 			if (screenLength == 0f)
@@ -95,15 +100,16 @@ namespace OpenRA.Mods.Common.Graphics
 			var delta = (end - start) / screenLength;
 			var corner = width / 2 * new float3(-delta.Y, delta.X, 0);
 
-			FillSoftBeam(start - corner, start + corner, end + corner, end - corner, color, edgeSoftness);
+			FillSoftBeam(start - corner, start + corner, end + corner, end - corner, color, edgeSoftness, bloomIntensity);
 		}
 
-		static void FillSoftBeam(in float3 a, in float3 b, in float3 c, in float3 d, Color color, float edgeSoftness)
+		static void FillSoftBeam(in float3 a, in float3 b, in float3 c, in float3 d, Color color, float edgeSoftness, float bloomIntensity)
 		{
 			var softness = Math.Min(0.49f, Math.Max(0f, edgeSoftness));
 			if (softness <= 0f)
 			{
-				Game.Renderer.WorldRgbaColorRenderer.FillRect(a, b, c, d, color, ignoreWorldTint: true, isBloomSource: true);
+				Game.Renderer.WorldRgbaColorRenderer.FillRect(a, b, c, d, color,
+					ignoreWorldTint: true, isBloomSource: true, bloomIntensity: bloomIntensity);
 				return;
 			}
 
@@ -115,11 +121,11 @@ namespace OpenRA.Mods.Common.Graphics
 			var renderer = Game.Renderer.WorldRgbaColorRenderer;
 
 			renderer.FillRect(a, leftStart, leftEnd, d, transparent, color, color, transparent,
-				ignoreWorldTint: true, isBloomSource: true);
+				ignoreWorldTint: true, isBloomSource: true, bloomIntensity: bloomIntensity);
 			renderer.FillRect(leftStart, rightStart, rightEnd, leftEnd, color, color, color, color,
-				ignoreWorldTint: true, isBloomSource: true);
+				ignoreWorldTint: true, isBloomSource: true, bloomIntensity: bloomIntensity);
 			renderer.FillRect(rightStart, b, c, rightEnd, color, transparent, transparent, color,
-				ignoreWorldTint: true, isBloomSource: true);
+				ignoreWorldTint: true, isBloomSource: true, bloomIntensity: bloomIntensity);
 		}
 
 		public void RenderDebugGeometry(WorldRenderer wr) { }
