@@ -74,7 +74,7 @@ namespace OpenRA.Graphics
 			{
 				var height = map.DistanceAboveTerrain(pos).Length;
 
-				IRenderable shadowRenderable = new SpriteRenderable(
+				var shadowRenderable = new SpriteRenderable(
 					shadow, pos, offset - new WVec(0, 0, height), CurrentSequence.ShadowZOffset + zOffset + height, palette,
 					CurrentSequence.Scale, 1f, float3.Ones, tintModifiers,
 					true, rotation).AsShadow();
