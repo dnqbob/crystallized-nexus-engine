@@ -35,6 +35,13 @@ namespace OpenRA
 		public bool WindowHasInputFocus => Window.HasInputFocus;
 		public bool WindowIsSuspended => Window.IsSuspended;
 
+		// Set true while the bloom glow extract pass is iterating preparedRenderables
+		// into the glow FBO. Renderables that normally defer their actual draw to a
+		// post-process pass (e.g. AreaBeamDistortionRenderable -> AreaBeamDistortionRenderer)
+		// can branch on this and draw directly into the glow buffer instead, so the
+		// effect still contributes to bloom.
+		public bool IsRenderingGlowExtraction { get; private set; }
+
 		public IReadOnlyDictionary<string, SpriteFont> Fonts;
 
 		internal IPlatformWindow Window { get; }
@@ -389,6 +396,7 @@ namespace OpenRA
 
 			WorldSpriteRenderer.SetGlowExtractParams(true);
 			glowBuffer.Bind();
+			IsRenderingGlowExtraction = true;
 			try
 			{
 				// Full Render(): the glow extract needs to see the body and
@@ -401,6 +409,7 @@ namespace OpenRA
 			}
 			finally
 			{
+				IsRenderingGlowExtraction = false;
 				glowBuffer.Unbind();
 				WorldSpriteRenderer.SetGlowExtractParams(false);
 			}

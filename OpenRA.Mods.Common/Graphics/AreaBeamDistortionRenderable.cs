@@ -76,6 +76,17 @@ namespace OpenRA.Mods.Common.Graphics
 			if (length.Length == 0)
 				return;
 
+			// During the bloom glow extract pass the queued post-process draw
+			// (AreaBeamDistortionRenderer.Draw) is never reached - that pass
+			// targets the world buffer, not the glow buffer. Draw the inner
+			// beam straight into the active (glow) FBO so the beam contributes
+			// to the bloom halo.
+			if (Game.Renderer.IsRenderingGlowExtraction)
+			{
+				new BeamRenderable(Pos, ZOffset, length, shape, beamWidth, color, beamEdgeSoftness, beamBloomIntensity).Render(wr);
+				return;
+			}
+
 			var start = wr.Screen3DPxPosition(Pos);
 			var end = wr.Screen3DPxPosition(Pos + length);
 			var screenWidth = Math.Abs(wr.ScreenVector(new WVec(width, WDist.Zero, WDist.Zero))[0]);
