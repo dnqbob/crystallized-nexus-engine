@@ -18,5 +18,13 @@ namespace OpenRA.Graphics
 		public static float Red = 1f;
 		public static float Green = 1f;
 		public static float Blue = 1f;
+
+		// Glow-pixel bloom (additive composite on top of the world buffer).
+		// A CN world trait writes these each tick when the relevant day/night
+		// condition is active; Renderer.RenderGlowBloom reads them. Default
+		// values (Enabled=false, Strength=0) make the entire pipeline a no-op
+		// so stock behaviour is unchanged unless a mod opts in.
+		public static bool BloomEnabled;
+		public static float BloomStrength;
 	}
 }

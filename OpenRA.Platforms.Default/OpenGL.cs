@@ -228,6 +228,7 @@ namespace OpenRA.Platforms.Default
 		public const int GL_FRAMEBUFFER = 0x8D40;
 		public const int GL_RENDERBUFFER = 0x8D41;
 		public const int GL_COLOR_ATTACHMENT0 = 0x8CE0;
+		public const int GL_COLOR_ATTACHMENT1 = 0x8CE1;
 		public const int GL_DEPTH_ATTACHMENT = 0x8D00;
 		public const int GL_FRAMEBUFFER_COMPLETE = 0x8CD5;
 		public const int GL_FRAMEBUFFER_BINDING = 0x8CA6;
@@ -486,6 +487,9 @@ namespace OpenRA.Platforms.Default
 			int textarget, uint texture, int level);
 		public static FramebufferTexture2D glFramebufferTexture2D { get; private set; }
 
+		public delegate void DrawBuffers(int n, int[] bufs);
+		public static DrawBuffers glDrawBuffers { get; private set; }
+
 		public delegate void DeleteFramebuffers(int n, ref uint framebuffers);
 		public static DeleteFramebuffers glDeleteFramebuffers { get; private set; }
 
@@ -657,6 +661,7 @@ namespace OpenRA.Platforms.Default
 				glGenFramebuffers = Bind<GenFramebuffers>("glGenFramebuffers");
 				glBindFramebuffer = Bind<BindFramebuffer>("glBindFramebuffer");
 				glFramebufferTexture2D = Bind<FramebufferTexture2D>("glFramebufferTexture2D");
+				glDrawBuffers = Bind<DrawBuffers>("glDrawBuffers");
 				glDeleteFramebuffers = Bind<DeleteFramebuffers>("glDeleteFramebuffers");
 				glGenRenderbuffers = Bind<GenRenderbuffers>("glGenRenderbuffers");
 				glBindRenderbuffer = Bind<BindRenderbuffer>("glBindRenderbuffer");

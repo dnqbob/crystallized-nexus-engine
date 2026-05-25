@@ -281,6 +281,9 @@ namespace OpenRA
 		[Desc("Enable procedural cloud shadow post-process effect.")]
 		public bool CloudShadows = true;
 
+		[Desc("Enable bloom on glowing palette-index pixels (additive halo on full-bright ranges, gated by a world trait).")]
+		public bool BloomGlowEffects = true;
+
 		[Desc("Enable VoxelDynamics tilt and recoil animations on units.")]
 		public bool VoxelDynamics = true;
 

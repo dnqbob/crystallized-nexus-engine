@@ -92,9 +92,11 @@ namespace OpenRA.Platforms.Default
 					getCreateFrameBuffer =
 						tuple =>
 						{
-							var t = ((Size, Color))tuple;
+							var t = ((Size, Color, bool))tuple;
+							var texture = (ITextureInternal)CreateTexture();
+							var secondaryTexture = t.Item3 ? (ITextureInternal)CreateTexture() : null;
 							return new ThreadedFrameBuffer(this,
-								context.CreateFrameBuffer(t.Item1, (ITextureInternal)CreateTexture(), t.Item2));
+								context.CreateFrameBuffer(t.Item1, texture, secondaryTexture, t.Item2));
 						};
 					getCreateShader = bindings => new ThreadedShader(this, context.CreateShader((IShaderBindings)bindings));
 					getCreateEmptyVertexBuffer =
@@ -423,12 +425,17 @@ namespace OpenRA.Platforms.Default
 
 		public IFrameBuffer CreateFrameBuffer(Size s)
 		{
-			return Send(getCreateFrameBuffer, (s, Color.FromArgb(0)));
+			return Send(getCreateFrameBuffer, (s, Color.FromArgb(0), false));
 		}
 
 		public IFrameBuffer CreateFrameBuffer(Size s, Color clearColor)
 		{
-			return Send(getCreateFrameBuffer, (s, clearColor));
+			return Send(getCreateFrameBuffer, (s, clearColor, false));
+		}
+
+		public IFrameBuffer CreateFrameBuffer(Size s, Color clearColor, bool withSecondaryColor)
+		{
+			return Send(getCreateFrameBuffer, (s, clearColor, withSecondaryColor));
 		}
 
 		public IShader CreateShader(IShaderBindings bindings)
@@ -511,7 +518,9 @@ namespace OpenRA.Platforms.Default
 	{
 		readonly ThreadedGraphicsContext device;
 		readonly Func<ITexture> getTexture;
+		readonly Func<ITexture> getSecondaryTexture;
 		readonly Action bind;
+		readonly Action bindNoClear;
 		readonly Action unbind;
 		readonly Action dispose;
 		readonly Action<object> enableScissor;
@@ -521,7 +530,9 @@ namespace OpenRA.Platforms.Default
 		{
 			this.device = device;
 			getTexture = () => frameBuffer.Texture;
+			getSecondaryTexture = () => frameBuffer.SecondaryTexture;
 			bind = frameBuffer.Bind;
+			bindNoClear = frameBuffer.BindNoClear;
 			unbind = frameBuffer.Unbind;
 			dispose = frameBuffer.Dispose;
 
@@ -530,10 +541,16 @@ namespace OpenRA.Platforms.Default
 		}
 
 		public ITexture Texture => device.Send(getTexture);
+		public ITexture SecondaryTexture => device.Send(getSecondaryTexture);
 
 		public void Bind()
 		{
 			device.Post(bind);
+		}
+
+		public void BindNoClear()
+		{
+			device.Post(bindNoClear);
 		}
 
 		public void Unbind()

@@ -90,10 +90,22 @@ namespace OpenRA.Platforms.Default
 			return new FrameBuffer(s, new Texture(), clearColor);
 		}
 
+		public IFrameBuffer CreateFrameBuffer(Size s, Color clearColor, bool withSecondaryColor)
+		{
+			VerifyThreadAffinity();
+			return new FrameBuffer(s, new Texture(), withSecondaryColor ? new Texture() : null, clearColor);
+		}
+
 		public IFrameBuffer CreateFrameBuffer(Size s, ITextureInternal texture, Color clearColor)
 		{
 			VerifyThreadAffinity();
 			return new FrameBuffer(s, texture, clearColor);
+		}
+
+		public IFrameBuffer CreateFrameBuffer(Size s, ITextureInternal texture, ITextureInternal secondaryTexture, Color clearColor)
+		{
+			VerifyThreadAffinity();
+			return new FrameBuffer(s, texture, secondaryTexture, clearColor);
 		}
 
 		public IShader CreateShader(IShaderBindings bindings)

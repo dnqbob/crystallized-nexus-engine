@@ -92,6 +92,7 @@ namespace OpenRA
 		ITexture CreateTexture();
 		IFrameBuffer CreateFrameBuffer(Size s);
 		IFrameBuffer CreateFrameBuffer(Size s, Color clearColor);
+		IFrameBuffer CreateFrameBuffer(Size s, Color clearColor, bool withSecondaryColor);
 		IShader CreateShader(IShaderBindings shaderBindings);
 		void EnableScissor(int x, int y, int width, int height);
 		void DisableScissor();
@@ -170,10 +171,17 @@ namespace OpenRA
 	public interface IFrameBuffer : IDisposable
 	{
 		void Bind();
+
+		// Like Bind() but preserves existing colour/depth contents instead
+		// of clearing when returning to the world buffer after an offscreen
+		// post-processing pass.
+		void BindNoClear();
+
 		void Unbind();
 		void EnableScissor(Rectangle rect);
 		void DisableScissor();
 		ITexture Texture { get; }
+		ITexture SecondaryTexture { get; }
 	}
 
 	public enum PrimitiveType

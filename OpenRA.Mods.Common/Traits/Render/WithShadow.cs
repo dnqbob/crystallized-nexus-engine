@@ -58,7 +58,8 @@ namespace OpenRA.Mods.Common.Traits.Render
 					.WithAlpha(shadowAlpha)
 					.OffsetBy(info.Offset - new WVec(0, 0, height))
 					.WithZOffset(ma.ZOffset + height + info.ZOffset)
-					.AsDecoration());
+					.AsDecoration()
+					.AsShadow());
 
 			return shadowSprites.Concat(renderables);
 		}

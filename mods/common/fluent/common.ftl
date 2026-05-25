@@ -366,6 +366,11 @@ options-target-lines =
     .manual = Manual
     .disabled = Disabled
 
+options-atmosphere =
+    .off = Off
+    .cinematic = Cinematic
+    .tox-haze = Tox Haze
+
 checkbox-frame-limiter = Enable Frame Limiter ({ $fps } FPS)
 
 ## HotkeysSettingsLogic

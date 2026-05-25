@@ -63,6 +63,9 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 		[Desc("Palette index ranges rendered as unlit overlay pixels that ignore world tint. Example: 1, 15, 240, 255.")]
 		public readonly int2[] FullBrightPaletteIndexRanges = [];
 
+		[Desc("Bloom multiplier for the full-bright overlay. 0 disables bloom while keeping the overlay visible; 1 is default.")]
+		public readonly float BloomGlowIntensity = 1f;
+
 		public int FullBrightStartIndex { get; private set; } = -1;
 		public int FullBrightEndIndex { get; private set; } = -1;
 		public int FullBrightStartIndex2 { get; private set; } = -1;
@@ -80,6 +83,9 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 				if (range.X < 0 || range.X > 255 || range.Y < 0 || range.Y > 255 || range.Y < range.X)
 					throw new YamlException($"{nameof(FullBrightPaletteIndexRanges)} must use valid ranges between 0 and 255.");
 			}
+
+			if (BloomGlowIntensity < 0f)
+				throw new YamlException($"{nameof(BloomGlowIntensity)} must be greater than or equal to 0.");
 
 			if (FullBrightPaletteIndexRanges.Length > 0)
 			{
@@ -183,6 +189,9 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 		protected PaletteReference colorPalette, normalsPalette, shadowPalette;
 		IEnumerable<IRenderable> IRender.Render(Actor self, WorldRenderer wr)
 		{
+			if (!components.Any(c => c.IsVisible))
+				return SpriteRenderable.None;
+
 			if (initializePalettes)
 			{
 				var paletteName = Info.Palette ?? Info.PlayerPalette + self.Owner.InternalName;
@@ -200,7 +209,8 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 					colorPalette, normalsPalette, shadowPalette,
 					1f, float3.Ones, TintModifiers.None, ShadowGroundZ,
 					fullBrightStartIndex: Info.FullBrightStartIndex, fullBrightEndIndex: Info.FullBrightEndIndex,
-					fullBrightStartIndex2: Info.FullBrightStartIndex2, fullBrightEndIndex2: Info.FullBrightEndIndex2)
+					fullBrightStartIndex2: Info.FullBrightStartIndex2, fullBrightEndIndex2: Info.FullBrightEndIndex2,
+					bloomGlowIntensity: Info.BloomGlowIntensity)
 			];
 		}
 
