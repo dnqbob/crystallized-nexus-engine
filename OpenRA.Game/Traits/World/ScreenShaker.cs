@@ -44,7 +44,7 @@ namespace OpenRA.Traits
 		{
 			shakeEffects.RemoveAll(t => t.ExpiryTime == ticks);
 
-			var newOffset = shakeEffects.Count > 0 ? GetScrollOffset() : float2.Zero;
+			var newOffset = shakeEffects.Count > 0 && Game.Settings.Graphics.ScreenShake ? GetScrollOffset() : float2.Zero;
 			if (newOffset != previousOffset)
 			{
 				worldRenderer.Viewport.Scroll(newOffset - previousOffset, true);

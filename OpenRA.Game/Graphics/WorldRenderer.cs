@@ -290,14 +290,19 @@ namespace OpenRA.Graphics
 			Game.Renderer.Flush();
 			ApplyPostProcessing(PostProcessPassType.AfterTerrain, enableDepthBuffer);
 
+			Game.Renderer.WorldSpriteRenderer.ResetGlowSourceTracking();
 			for (var i = 0; i < preparedRenderables.Count; i++)
 				preparedRenderables[i].Render(this);
+			var actorsHaveGlow = Game.Renderer.WorldSpriteRenderer.SubmittedGlowSource;
 
 			// Glow bloom (gated by a CN world trait through WorldTintState).
 			// Runs after the main actor pass so the world buffer is fully
 			// populated, then re-renders geometry with GlowExtractOnly into a
 			// dedicated FBO, blurs, and additively composites the halo back.
-			if (WorldTintState.BloomEnabled && Game.Settings.Graphics.BloomGlowEffects && WorldTintState.BloomStrength > 0f)
+			// Skipped when nothing in this pass actually glowed — the extract
+			// would produce an empty buffer that composites as a no-op.
+			if (WorldTintState.BloomEnabled && Game.Settings.Graphics.BloomGlowEffects && WorldTintState.BloomStrength > 0f
+				&& actorsHaveGlow)
 			{
 				if (enableDepthBuffer)
 					Game.Renderer.Context.DisableDepthBuffer();
@@ -335,12 +340,14 @@ namespace OpenRA.Graphics
 			World.ApplyToActorsWithTrait<IRenderShroud>((actor, trait) => trait.RenderShroud(this));
 
 			// HACK: Keep old grouping behaviour
+			Game.Renderer.WorldSpriteRenderer.ResetGlowSourceTracking();
 			var groupedOverlayRenderables = preparedOverlayRenderables.GroupBy(prs => prs.GetType());
 			foreach (var g in groupedOverlayRenderables)
 				foreach (var r in g)
 					r.Render(this);
 
-			if (WorldTintState.BloomEnabled && Game.Settings.Graphics.BloomGlowEffects && WorldTintState.BloomStrength > 0f)
+			if (WorldTintState.BloomEnabled && Game.Settings.Graphics.BloomGlowEffects && WorldTintState.BloomStrength > 0f
+				&& Game.Renderer.WorldSpriteRenderer.SubmittedGlowSource)
 				Game.Renderer.RenderGlowBloom(this, preparedOverlayRenderables, WorldTintState.BloomStrength);
 
 			ApplyPostProcessing(PostProcessPassType.AfterShroud);

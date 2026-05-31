@@ -68,7 +68,8 @@ namespace OpenRA.Graphics
 			var shadow = CurrentSequence.GetShadow(CurrentFrame, facingFunc());
 			var imageRenderable = new SpriteRenderable(
 				image, pos, offset, CurrentSequence.ZOffset + zOffset, palette,
-				CurrentSequence.Scale, alpha, float3.Ones, tintModifiers, IsDecoration, rotation);
+				CurrentSequence.Scale, alpha, float3.Ones, tintModifiers, IsDecoration, rotation,
+				bloomIntensity: CurrentSequence.BloomGlowIntensity);
 
 			if (shadow != null)
 			{
@@ -77,7 +78,7 @@ namespace OpenRA.Graphics
 				var shadowRenderable = new SpriteRenderable(
 					shadow, pos, offset - new WVec(0, 0, height), CurrentSequence.ShadowZOffset + zOffset + height, palette,
 					CurrentSequence.Scale, 1f, float3.Ones, tintModifiers,
-					true, rotation).AsShadow();
+					true, rotation, bloomIntensity: CurrentSequence.BloomGlowIntensity).AsShadow();
 
 				return [shadowRenderable, imageRenderable];
 			}

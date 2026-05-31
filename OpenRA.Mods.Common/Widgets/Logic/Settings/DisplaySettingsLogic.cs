@@ -169,6 +169,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			SettingsUtils.BindCheckboxPref(panel, "TIBERIUM_EFFECTS_CHECKBOX", graphicSettings, "TiberiumEffects");
 			SettingsUtils.BindCheckboxPref(panel, "BLOOM_GLOW_CHECKBOX", graphicSettings, "BloomGlowEffects");
 			SettingsUtils.BindCheckboxPref(panel, "VOXEL_DYNAMICS_CHECKBOX", graphicSettings, "VoxelDynamics");
+			SettingsUtils.BindCheckboxPref(panel, "SCREEN_SHAKE_CHECKBOX", graphicSettings, "ScreenShake");
 			SettingsUtils.BindCheckboxPref(panel, "CURSORDOUBLE_CHECKBOX", graphicSettings, "CursorDouble");
 			SettingsUtils.BindCheckboxPref(panel, "VSYNC_CHECKBOX", graphicSettings, "VSync");
 			SettingsUtils.BindCheckboxPref(panel, "FRAME_LIMIT_CHECKBOX", graphicSettings, "CapFramerate");

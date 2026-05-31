@@ -197,6 +197,9 @@ namespace OpenRA.Graphics
 			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0, bool isBloomSource = false,
 			float bloomIntensity = 1f)
 		{
+			if (isBloomSource || fullBrightPaletteRanges != 0)
+				SubmittedGlowSource = true;
+
 			var samplers = SetRenderStateForSprite(s);
 			Util.FastCreateQuad(vertices, location + scale * s.Offset, s, samplers, paletteTextureIndex, vertexCount, scale * s.Size, tint, alpha,
 								rotation, ignoreWorldTint, fullBrightPaletteRanges, isBloomSource, bloomIntensity);
@@ -207,6 +210,9 @@ namespace OpenRA.Graphics
 			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0, bool isBloomSource = false,
 			float bloomIntensity = 1f)
 		{
+			if (isBloomSource || fullBrightPaletteRanges != 0)
+				SubmittedGlowSource = true;
+
 			var samplers = SetRenderStateForSprite(s);
 			Util.FastCreateQuad(vertices, location + scale * s.Offset, s, samplers, ResolveTextureIndex(s, pal), vertexCount, scale * s.Size, tint, alpha,
 								rotation, ignoreWorldTint, fullBrightPaletteRanges, isBloomSource, bloomIntensity);
@@ -224,6 +230,9 @@ namespace OpenRA.Graphics
 		internal void DrawSprite(Sprite s, int paletteTextureIndex, in float3 a, in float3 b, in float3 c, in float3 d, in float3 tint, float alpha,
 			bool isBloomSource = false, float bloomIntensity = 1f)
 		{
+			if (isBloomSource)
+				SubmittedGlowSource = true;
+
 			var samplers = SetRenderStateForSprite(s);
 			Util.FastCreateQuad(vertices, a, b, c, d, s, samplers, paletteTextureIndex, tint, alpha, vertexCount,
 				isBloomSource: isBloomSource, bloomIntensity: bloomIntensity);
@@ -339,6 +348,15 @@ namespace OpenRA.Graphics
 		{
 			Shader.SetBool("GlowExtractOnly", extractOnly);
 		}
+
+		// True if any bloom/full-bright sprite has been submitted since the last
+		// reset. Every glow contributor (sprites, voxel FullBrightSprite, beams,
+		// railguns) funnels through DrawSprite, so this is a complete signal that
+		// lets WorldRenderer skip the glow extract+blur+composite passes entirely
+		// when nothing on screen glows (e.g. scrolling empty terrain at night).
+		public bool SubmittedGlowSource { get; private set; }
+
+		public void ResetGlowSourceTracking() => SubmittedGlowSource = false;
 
 		public void EnablePixelArtScaling(bool enabled)
 		{

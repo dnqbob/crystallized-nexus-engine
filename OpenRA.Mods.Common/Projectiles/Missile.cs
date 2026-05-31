@@ -724,6 +724,15 @@ namespace OpenRA.Mods.Common.Projectiles
 							// away from the target
 							var h1 = loopRadius - Exts.ISqrt(d1 * (2 * loopRadius - d1)) - (pos.Z - lastHt);
 
+							// Keep the critical height within the loop geometry [0, 2 * loopRadius] so the
+							// ISqrt below is never fed a negative value (mirrors the d1 clamping above).
+							// h1 exceeds 2 * loopRadius when the missile must climb more than a full loop
+							// diameter, e.g. a slow/agile missile (small loopRadius) facing a tall cliff.
+							if (h1 < 0)
+								h1 = 0;
+							if (h1 > 2 * loopRadius)
+								h1 = 2 * loopRadius;
+
 							if (h1 > loopRadius * (1024 - WAngle.FromFacing(vFacing).Cos()) / 1024)
 								desiredVFacing = WAngle.ArcTan(Exts.ISqrt(h1 * (2 * loopRadius - h1)), loopRadius - h1).Angle >> 2;
 							else
