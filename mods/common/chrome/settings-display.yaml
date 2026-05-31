@@ -204,6 +204,15 @@ Container@DISPLAY_PANEL:
 									Height: 20
 									Font: Regular
 									Text: checkbox-bloom-glow-container
+						Container@SCREEN_SHAKE_CHECKBOX_CONTAINER:
+							X: PARENT_WIDTH / 2 + 10
+							Width: PARENT_WIDTH / 2 - 20
+							Children:
+								Checkbox@SCREEN_SHAKE_CHECKBOX:
+									Width: PARENT_WIDTH
+									Height: 20
+									Font: Regular
+									Text: checkbox-screen-shake-container
 				Container@ROW:
 					Width: PARENT_WIDTH - 24
 					Height: 50

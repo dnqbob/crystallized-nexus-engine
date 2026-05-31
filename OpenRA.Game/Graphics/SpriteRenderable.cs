@@ -118,8 +118,11 @@ namespace OpenRA.Graphics
 
 		public SpriteRenderable WithFullBrightOnly(uint paletteRanges, float bloomIntensity = 1f)
 		{
+			// Fold the per-sequence bloom multiplier (carried on this renderable) into the
+			// per-actor one passed by the caller so a single sequence can be dimmed even when
+			// the glow comes from the full-bright palette path rather than the BloomGlow flag.
 			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint,
-				TintModifiers | TintModifiers.IgnoreWorldTint, IsDecoration, rotation, flipY, paletteRanges, IsShadow, bloomIntensity);
+				TintModifiers | TintModifiers.IgnoreWorldTint, IsDecoration, rotation, flipY, paletteRanges, IsShadow, this.bloomIntensity * bloomIntensity);
 		}
 
 		float3 ScreenPosition(WorldRenderer wr)

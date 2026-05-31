@@ -287,6 +287,9 @@ namespace OpenRA
 		[Desc("Enable VoxelDynamics tilt and recoil animations on units.")]
 		public bool VoxelDynamics = true;
 
+		[Desc("Enable screen shake from explosions and other effects.")]
+		public bool ScreenShake = true;
+
 		[Desc("Display index to use in a multi-monitor fullscreen setup.")]
 		public int VideoDisplay = 0;
 

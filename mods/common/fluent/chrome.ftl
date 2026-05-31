@@ -682,6 +682,7 @@ checkbox-cloud-shadows-container = Cloud Shadows
 checkbox-voxel-dynamics-container = Voxel Dynamics
 checkbox-tiberium-effects-container = Tiberium Effects
 checkbox-bloom-glow-container = Bloom Glow
+checkbox-screen-shake-container = Screen Shake
 label-grading-dropdown-container = Atmosphere:
 label-video-section-header = Video
 label-video-mode-dropdown-container = Video Mode:
