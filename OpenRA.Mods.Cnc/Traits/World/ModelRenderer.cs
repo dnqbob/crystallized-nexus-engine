@@ -39,13 +39,13 @@ namespace OpenRA.Mods.Cnc.Traits
 
 	[TraitLocation(SystemActors.World | SystemActors.EditorWorld)]
 	[Desc("Render voxels")]
-	public class ModelRendererInfo : TraitInfo
+	public class ModelRendererInfo : TraitInfo, Requires<IModelCacheInfo>
 	{
 		public readonly int RenderBufferSize = 2048;
 		public override object Create(ActorInitializer init) { return new ModelRenderer(this, init.Self); }
 	}
 
-	public sealed class ModelRenderer : IDisposable, IRenderer, INotifyActorDisposing, INotifyCreated
+	public sealed class ModelRenderer : IDisposable, IRenderer, INotifyActorDisposing
 	{
 		// Static constants
 		static readonly ImmutableArray<float> ShadowDiffuse = [0, 0, 0];
@@ -58,9 +58,9 @@ namespace OpenRA.Mods.Cnc.Traits
 		static readonly float[] ShadowScaleFlipMtx = Util.ScaleMatrix(2, -2, 2);
 		static readonly float[] GroundNormal = [0, 0, 1, 1];
 
-		public readonly IShader Shader;
 		readonly Renderer renderer;
-		public IModelCache ModelCache;
+		readonly IShader shader;
+		public readonly IModelCache ModelCache;
 
 		readonly Dictionary<Sheet, IFrameBuffer> mappedBuffers = [];
 		readonly Stack<KeyValuePair<Sheet, IFrameBuffer>> unmappedBuffers = [];
@@ -72,15 +72,17 @@ namespace OpenRA.Mods.Cnc.Traits
 
 		public void SetPalette(HardwarePalette palette)
 		{
-			Shader.SetTexture("Palette", palette.Texture);
-			Shader.SetVec("PaletteRows", palette.Height);
+			shader.SetTexture("Palette", palette.Texture);
+			shader.SetVec("PaletteRows", palette.Height);
 		}
 
 		public ModelRenderer(ModelRendererInfo info, Actor self)
 		{
 			renderer = Game.Renderer;
-			Shader = renderer.CreateShader(new ModelShaderBindings());
+			shader = renderer.CreateShader(new ModelShaderBindings());
 			renderer.WorldRenderers = renderer.WorldRenderers.Append(this).ToArray();
+
+			ModelCache = self.Trait<IModelCache>();
 
 			sheetSize = info.RenderBufferSize;
 			var a = 2f / sheetSize;
@@ -92,12 +94,7 @@ namespace OpenRA.Mods.Cnc.Traits
 				-1, 1, 0, 1
 			};
 
-			Shader.SetMatrix("View", view);
-		}
-
-		void INotifyCreated.Created(Actor self)
-		{
-			ModelCache = self.Trait<IModelCache>();
+			shader.SetMatrix("View", view);
 		}
 
 		public ModelRenderProxy RenderAsync(
@@ -337,18 +334,18 @@ namespace OpenRA.Mods.Cnc.Traits
 			bool fullBrightOnly, int fullBrightStartIndex, int fullBrightEndIndex,
 			int fullBrightStartIndex2, int fullBrightEndIndex2)
 		{
-			Shader.SetTexture("DiffuseTexture", renderData.Sheet.GetTexture());
-			Shader.SetVec("Palettes", colorPaletteTextureIndex, normalsPaletteTextureIndex);
-			Shader.SetVec("FullBrightRange", fullBrightStartIndex, fullBrightEndIndex);
-			Shader.SetVec("FullBrightRange2", fullBrightStartIndex2, fullBrightEndIndex2);
-			Shader.SetVec("FullBrightOnly", fullBrightOnly ? 1 : 0);
-			Shader.SetMatrix("TransformMatrix", t);
-			Shader.SetVec("LightDirection", lightDirection, 4);
-			Shader.SetVec("AmbientLight", ambientLight.AsMemory(), 3);
-			Shader.SetVec("DiffuseLight", diffuseLight.AsMemory(), 3);
+			shader.SetTexture("DiffuseTexture", renderData.Sheet.GetTexture());
+			shader.SetVec("Palettes", colorPaletteTextureIndex, normalsPaletteTextureIndex);
+			shader.SetVec("FullBrightRange", fullBrightStartIndex, fullBrightEndIndex);
+			shader.SetVec("FullBrightRange2", fullBrightStartIndex2, fullBrightEndIndex2);
+			shader.SetVec("FullBrightOnly", fullBrightOnly ? 1 : 0);
+			shader.SetMatrix("TransformMatrix", t);
+			shader.SetVec("LightDirection", lightDirection, 4);
+			shader.SetVec("AmbientLight", ambientLight.AsMemory(), 3);
+			shader.SetVec("DiffuseLight", diffuseLight.AsMemory(), 3);
 
-			Shader.PrepareRender();
-			renderer.DrawBatch(cache.VertexBuffer, Shader, renderData.Start, renderData.Count, PrimitiveType.TriangleList);
+			shader.PrepareRender();
+			renderer.DrawBatch(cache.VertexBuffer, shader, renderData.Start, renderData.Count, PrimitiveType.TriangleList);
 		}
 
 		public void BeginFrame()
@@ -441,7 +438,7 @@ namespace OpenRA.Mods.Cnc.Traits
 
 			mappedBuffers.Clear();
 			unmappedBuffers.Clear();
-			Shader.Dispose();
+			shader.Dispose();
 			renderer.WorldRenderers = renderer.WorldRenderers.Where(r => r != this).ToArray();
 		}
 

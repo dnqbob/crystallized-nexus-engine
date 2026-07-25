@@ -24,52 +24,8 @@ namespace OpenRA.Mods.Cnc.Traits
 {
 	[TraitLocation(SystemActors.EditorWorld)]
 	[Desc("A purpose-built Tiberian Sun map generator.")]
-	public sealed class TSMapGeneratorInfo : TraitInfo, IEditorMapGeneratorInfo
+	public sealed class TSMapGeneratorInfo : MapGeneratorBaseInfo
 	{
-		[FieldLoader.Require]
-		[Desc("Human-readable name this generator uses.")]
-		[FluentReference]
-		public readonly string Name = null;
-
-		[FieldLoader.Require]
-		[Desc("Internal id for this map generator.")]
-		public readonly string Type = null;
-
-		[FieldLoader.Require]
-		[Desc("Tilesets that are compatible with this map generator.")]
-		public readonly ImmutableArray<string> Tilesets = default;
-
-		[FluentReference]
-		[Desc("The title to use for generated maps.")]
-		public readonly string MapTitle = "label-random-map";
-
-		[Desc("The widget tree to open when the tool is selected.")]
-		public readonly string PanelWidget = "MAP_GENERATOR_TOOL_PANEL";
-
-		// This is purely of interest to the linter.
-		[FieldLoader.LoadUsing(nameof(FluentReferencesLoader))]
-		[FluentReference]
-		public readonly ImmutableArray<string> FluentReferences = default;
-
-		[FieldLoader.LoadUsing(nameof(SettingsLoader))]
-		public readonly MiniYaml Settings;
-
-		string IMapGeneratorInfo.Type => Type;
-		string IMapGeneratorInfo.Name => Name;
-		string IMapGeneratorInfo.MapTitle => MapTitle;
-		ImmutableArray<string> IEditorMapGeneratorInfo.Tilesets => Tilesets;
-
-		static MiniYaml SettingsLoader(MiniYaml my)
-		{
-			return my.NodeWithKey("Settings").Value;
-		}
-
-		static object FluentReferencesLoader(MiniYaml my)
-		{
-			return new MapGeneratorSettings(null, my.NodeWithKey("Settings").Value)
-				.Options.SelectMany(o => o.GetFluentReferences()).ToImmutableArray();
-		}
-
 		const int FractionMax = Terraformer.FractionMax;
 		const int EntityBonusMax = 1000000;
 
@@ -113,9 +69,6 @@ namespace OpenRA.Mods.Cnc.Traits
 			public readonly int ForestFloor = default;
 			[FieldLoader.Require]
 			public readonly int ForestCutout = default;
-			public readonly int IceFields = 0;
-			public readonly int IceFieldWaterBorder = 2;
-			public readonly int RoughGroundPatches = 0;
 			[FieldLoader.Require]
 			public readonly int MaximumCutoutSpacing = default;
 			[FieldLoader.Require]
@@ -131,8 +84,6 @@ namespace OpenRA.Mods.Cnc.Traits
 			public readonly int MinimumMountainThickness = default;
 			[FieldLoader.Require]
 			public readonly int MaximumAltitude = default;
-			public readonly int BaseLandHeight = 0;
-			public readonly int BaseLandHeightEdgeVariation = 0;
 			[FieldLoader.Require]
 			public readonly int RoughnessRadius = default;
 			[FieldLoader.Require]
@@ -205,22 +156,8 @@ namespace OpenRA.Mods.Cnc.Traits
 			public readonly int MinimumBuildings = default;
 			[FieldLoader.Require]
 			public readonly int MaximumBuildings = default;
-			public readonly int MaximumBuildingsTotal = default;
 			[FieldLoader.LoadUsing(nameof(BuildingWeightsLoader))]
 			public readonly IReadOnlyDictionary<string, int> BuildingWeights = default;
-			public readonly int MinimumVeinholes = 0;
-			public readonly int MaximumVeinholes = 0;
-			public readonly int DecorativeRocks = 0;
-			public readonly int StrategicRocks = 0;
-			public readonly int MinimumStrategicRockClusterActors = 2;
-			public readonly int MaximumStrategicRockClusterActors = 5;
-			public readonly int StrategicRockClusterInner = 1;
-			public readonly int MinimumStrategicRockClusterRadius = 2;
-			public readonly int MaximumStrategicRockClusterRadius = 5;
-			public readonly int StrategicRockClusterBorder = 2;
-			public readonly int RockReservation = 2;
-			[FieldLoader.LoadUsing(nameof(RockWeightsLoader))]
-			public readonly IReadOnlyDictionary<string, int> RockWeights = ImmutableDictionary<string, int>.Empty;
 			[FieldLoader.Require]
 			public readonly int CivilianBuildings = default;
 			[FieldLoader.Require]
@@ -242,10 +179,6 @@ namespace OpenRA.Mods.Cnc.Traits
 			public readonly IReadOnlyList<MultiBrush> UnplayableObstacles;
 			[FieldLoader.Ignore]
 			public readonly IReadOnlyList<MultiBrush> CivilianBuildingsObstacles;
-			[FieldLoader.Ignore]
-			public readonly IReadOnlyList<MultiBrush> RoughGroundPatchBrushes;
-			[FieldLoader.Ignore]
-			public readonly IReadOnlyList<MultiBrush> IceFieldBrushes;
 			[FieldLoader.Require]
 			public readonly ushort ForestFloorTile = default;
 			public readonly ushort PavedRoadNorthWestSouthEastTile = 312;
@@ -317,12 +250,6 @@ namespace OpenRA.Mods.Cnc.Traits
 				ForestObstacles = MultiBrush.LoadCollection(map, my.NodeWithKey("ForestObstacles").Value.Value);
 				UnplayableObstacles = MultiBrush.LoadCollection(map, my.NodeWithKey("UnplayableObstacles").Value.Value);
 				CivilianBuildingsObstacles = MultiBrush.LoadCollection(map, my.NodeWithKey("CivilianBuildingsObstacles").Value.Value);
-				RoughGroundPatchBrushes = my.NodeWithKeyOrDefault("RoughGroundPatchBrushes") != null
-					? MultiBrush.LoadCollection(map, my.NodeWithKey("RoughGroundPatchBrushes").Value.Value)
-					: [];
-				IceFieldBrushes = my.NodeWithKeyOrDefault("IceFieldBrushes") != null
-					? MultiBrush.LoadCollection(map, my.NodeWithKey("IceFieldBrushes").Value.Value)
-					: [];
 				OtherGround = my.NodeWithKeyOrDefault("OtherGround")?.Value.Nodes.Select(
 					n =>
 					{
@@ -428,96 +355,14 @@ namespace OpenRA.Mods.Cnc.Traits
 							throw new YamlException($"Invalid resource spawn weight `{subMy.Value}`");
 					});
 			}
-
-			static IReadOnlyDictionary<string, int> RockWeightsLoader(MiniYaml my)
-			{
-				return my.NodeWithKey("RockWeights").Value.ToDictionary(subMy =>
-					{
-						if (Exts.TryParseInt32Invariant(subMy.Value, out var f))
-							return f;
-						else
-							throw new YamlException($"Invalid rock weight `{subMy.Value}`");
-					});
-			}
 		}
 
-		public IMapGeneratorSettings GetSettings()
+		public override Map Generate(ModData modData, MapGenerationArgs args)
 		{
-			return new MapGeneratorSettings(this, Settings);
-		}
-
-		static void SetBaseLandHeight(RampTiler.HeightMap heightMap, byte baseLandHeight, int edgeFlattening, Matrix<int> edgeDelay)
-		{
-			if (baseLandHeight == 0)
-				return;
-
-			var distanceToUntileable = new Matrix<int>(heightMap.Target.Size).Fill(int.MaxValue);
-			var queue = new Queue<int2>();
-			var adjacentCornerOffsets = new[] { new int2(0, -1), new int2(1, 0), new int2(0, 1), new int2(-1, 0) };
-			for (var y = 0; y < distanceToUntileable.Size.Y; y++)
-			{
-				for (var x = 0; x < distanceToUntileable.Size.X; x++)
-				{
-					if (heightMap.Adjustable[x, y])
-						continue;
-
-					distanceToUntileable[x, y] = 0;
-					queue.Enqueue(new int2(x, y));
-				}
-			}
-
-			while (queue.Count > 0)
-			{
-				var xy = queue.Dequeue();
-				var distance = distanceToUntileable[xy] + 1;
-				foreach (var offset in adjacentCornerOffsets)
-				{
-					var next = xy + offset;
-					if (!distanceToUntileable.ContainsXY(next) || !heightMap.Adjustable[next])
-						continue;
-
-					if (distance >= distanceToUntileable[next])
-						continue;
-
-					distanceToUntileable[next] = distance;
-					queue.Enqueue(next);
-				}
-			}
-
-			void RaiseCorner(int2 xy)
-			{
-				if (!heightMap.Target.ContainsXY(xy) || !heightMap.Adjustable[xy])
-					return;
-
-				var delayedDistance = distanceToUntileable[xy] - edgeFlattening - (edgeDelay?[xy] ?? 0);
-				var height = (byte)Math.Clamp(delayedDistance, byte.MinValue, baseLandHeight);
-				heightMap.Target[xy] = Math.Max(heightMap.Target[xy], height);
-				heightMap.LowerBound[xy] = Math.Max(heightMap.LowerBound[xy], height);
-			}
-
-			foreach (var cpos in heightMap.Tileable.CellRegion)
-			{
-				if (!heightMap.Tileable[cpos])
-					continue;
-
-				var xy = heightMap.CPosToXy(cpos);
-				RaiseCorner(xy);
-				RaiseCorner(xy + new int2(1, 0));
-				RaiseCorner(xy + new int2(0, 1));
-				RaiseCorner(xy + new int2(1, 1));
-			}
-		}
-
-		public Map Generate(ModData modData, MapGenerationArgs args)
-		{
-			var terrainInfo = modData.DefaultTerrainInfo[args.Tileset];
-			var size = args.Size;
-
-			var map = new Map(modData, terrainInfo, size);
 			var actorPlans = new List<ActorPlan>();
-
-			var param = new Parameters(map, args.Settings);
-
+			var terrainInfo = modData.DefaultTerrainInfo[args.Tileset];
+			var map = new Map(modData, terrainInfo, args.Size);
+			var param = new Parameters(map, GenerateParameterYaml(modData, args));
 			var terraformer = new Terraformer(args, map, modData, actorPlans, param.Mirror, param.Rotations);
 
 			CellLayer<MultiBrush.Replaceability> PlayableToReplaceable()
@@ -572,8 +417,6 @@ namespace OpenRA.Mods.Cnc.Traits
 			var decorationTilingRandom = new MersenneTwister(random.Next());
 			var heightMapNoiseRandom = new MersenneTwister(random.Next());
 			var groundTypeNoiseRandom = new MersenneTwister(random.Next());
-			var baseLandHeightRandom = new MersenneTwister(random.Next());
-			var rockRandom = new MersenneTwister(random.Next());
 
 			terraformer.InitMap();
 
@@ -708,28 +551,6 @@ namespace OpenRA.Mods.Cnc.Traits
 
 			heightMap.MarkUntileable(
 				CellLayerUtils.Map(landCoastWater, v => v != Terraformer.Side.In));
-
-			Matrix<int> baseLandHeightEdgeDelay = null;
-			if (param.BaseLandHeightEdgeVariation > 0)
-			{
-				baseLandHeightEdgeDelay = NoiseUtils.SymmetricFractalNoise(
-					baseLandHeightRandom,
-					heightMap.Target.Size,
-					terraformer.Rotations,
-					terraformer.WMirror.ForCPos(),
-					Math.Max(4096, param.RampFeatureSize / 2),
-					NoiseUtils.PinkAmplitude);
-				baseLandHeightEdgeDelay = MatrixUtils.BinomialBlur(baseLandHeightEdgeDelay, 1);
-				baseLandHeightEdgeDelay = MatrixUtils
-					.NormalizeRangeInPlace(baseLandHeightEdgeDelay, param.BaseLandHeightEdgeVariation)
-					.Map(v => Math.Max(0, v));
-			}
-
-			SetBaseLandHeight(
-				heightMap,
-				(byte)Math.Clamp(param.BaseLandHeight, 0, map.Grid.MaximumTerrainHeight),
-				param.WaterCliffs ? 0 : 1,
-				baseLandHeightEdgeDelay);
 
 			if (param.Mountains > 0)
 			{
@@ -973,75 +794,11 @@ namespace OpenRA.Mods.Cnc.Traits
 								(int)(param.MinimumBuildings * perSymmetryEntityMultiplier / EntityBonusMax),
 								(int)(param.MaximumBuildings * perSymmetryEntityMultiplier / EntityBonusMax) + 1)
 							: 0;
-					if (param.MaximumBuildingsTotal > 0)
-					{
-						var maximumBuildingGroups = Math.Max(1, param.MaximumBuildingsTotal / symmetryCount);
-						targetBuildingCount = Math.Min(targetBuildingCount, maximumBuildingGroups);
-					}
-
 					for (var i = 0; i < targetBuildingCount; i++)
 						terraformer.AddActor(
 							buildingRandom,
 							zoneable,
 							buildingTypes[buildingRandom.PickWeighted(buildingWeights)]);
-				}
-
-				// Veinholes
-				{
-					var targetVeinholeCount =
-						(param.MaximumVeinholes != 0)
-							? buildingRandom.Next(
-								(int)(param.MinimumVeinholes * perSymmetryEntityMultiplier / EntityBonusMax),
-								(int)(param.MaximumVeinholes * perSymmetryEntityMultiplier / EntityBonusMax) + 1)
-							: 0;
-					for (var i = 0; i < targetVeinholeCount; i++)
-						terraformer.AddActor(
-							buildingRandom,
-							zoneable,
-							"veinhole");
-				}
-
-				// Rocks
-				if (param.RockWeights.Count > 0)
-				{
-					var rockDezoneRadius = new WDist(param.RockReservation * 1024);
-					var targetDecorativeRockCount = (int)(param.DecorativeRocks * perSymmetryEntityMultiplier / EntityBonusMax);
-					if (targetDecorativeRockCount > 0)
-					{
-						var rockDistribution = CellLayerUtils.Create(map, (MPos mpos) => zoneable[mpos] ? 1 : 0);
-						terraformer.AddDistributedActors(
-							rockRandom,
-							zoneable,
-							rockDistribution,
-							param.RockWeights,
-							targetDecorativeRockCount,
-							true,
-							rockDezoneRadius);
-					}
-
-					var strategicRocksRemaining = (int)(param.StrategicRocks * perSymmetryEntityMultiplier / EntityBonusMax);
-					while (strategicRocksRemaining > 0)
-					{
-						var clusterSize = Math.Min(
-							strategicRocksRemaining,
-							rockRandom.Next(
-								param.MinimumStrategicRockClusterActors,
-								param.MaximumStrategicRockClusterActors + 1));
-						var added = terraformer.AddActorCluster(
-							rockRandom,
-							zoneable,
-							param.RockWeights,
-							clusterSize,
-							param.StrategicRockClusterInner,
-							param.MinimumStrategicRockClusterRadius,
-							param.MaximumStrategicRockClusterRadius,
-							param.StrategicRockClusterBorder,
-							true,
-							rockDezoneRadius);
-						strategicRocksRemaining -= added;
-						if (added == 0)
-							break;
-					}
 				}
 
 				// Grow resources
@@ -1506,38 +1263,13 @@ namespace OpenRA.Mods.Cnc.Traits
 						map.Tiles[cpos] = new TerrainTile(tile, 0);
 			}
 
-			void DecorateBrushes(IReadOnlyList<MultiBrush> brushes, int fraction, CellLayer<bool> paintable)
-			{
-				if (fraction <= 0 || brushes.Count == 0)
-					return;
-
-				var noise = terraformer.BooleanNoise(groundTypeNoiseRandom, 10240, fraction);
-				noise = CellLayerUtils.Intersect([noise, paintable]);
-				noise = terraformer.ImproveSymmetry(noise, true, (a, b) => a && b);
-
-				var replace = new CellLayer<MultiBrush.Replaceability>(map);
-				foreach (var cpos in map.Tiles.CellRegion)
-					if (noise[cpos])
-						replace[cpos] = MultiBrush.Replaceability.Any;
-
-				terraformer.PaintArea(groundTypeNoiseRandom, replace, brushes, true);
-			}
-
-			DecorateBrushes(
-				param.IceFieldBrushes,
-				param.IceFields,
-				terraformer.ErodeZones(terraformer.CheckSpace(param.WaterTile), param.IceFieldWaterBorder));
-			DecorateBrushes(
-				param.RoughGroundPatchBrushes,
-				param.RoughGroundPatches,
-				CellLayerUtils.Intersect([zoneable, terraformer.CheckSpace(param.LandTile)]));
 			DecorateFloorTiles(param.ForestFloorTile, param.ForestFloor, forestPlan);
 			foreach (var (tile, fraction) in param.OtherGround)
 				DecorateFloorTiles(tile, fraction);
 
 			// Cosmetically repaint tiles
 			terraformer.PaintTiling(pickAnyRandom, param.LatTiler.OfferReplacements(map, pickAnyRandom), 0);
-			if (param.IceLatTiler != null && (param.UseIceLatTiler || (param.IceFields > 0 && param.IceFieldBrushes.Count > 0)))
+			if (param.UseIceLatTiler)
 				terraformer.PaintTiling(pickAnyRandom, param.IceLatTiler.OfferReplacements(map, pickAnyRandom), 0);
 
 			terraformer.RepaintTiles(repaintRandom, param.RepaintTiles);
@@ -1548,44 +1280,15 @@ namespace OpenRA.Mods.Cnc.Traits
 			return map;
 		}
 
-		public bool TryGenerateMetadata(ModData modData, MapGenerationArgs args, out MapPlayers players, out Dictionary<string, MiniYaml> ruleDefinitions)
-		{
-			try
-			{
-				var playerCount = FieldLoader.GetValue<int>("Players", args.Settings.NodeWithKey("Players").Value.Value);
-
-				// Generated maps use the default ruleset
-				ruleDefinitions = [];
-				players = new MapPlayers(modData.DefaultRules, playerCount);
-
-				return true;
-			}
-			catch
-			{
-				players = null;
-				ruleDefinitions = null;
-				return false;
-			}
-		}
-
 		public override object Create(ActorInitializer init)
 		{
-			return new TSMapGenerator(this);
+			return new TSMapGenerator(init, this);
 		}
 	}
 
-	public class TSMapGenerator : IEditorTool
+	public class TSMapGenerator : MapGeneratorBase
 	{
-		public string Label { get; }
-		public string PanelWidget { get; }
-		public TraitInfo TraitInfo { get; }
-		public bool IsEnabled => true;
-
-		public TSMapGenerator(TSMapGeneratorInfo info)
-		{
-			Label = info.Name;
-			PanelWidget = info.PanelWidget;
-			TraitInfo = info;
-		}
+		public TSMapGenerator(ActorInitializer init, TSMapGeneratorInfo info)
+			: base(init, info) { }
 	}
 }

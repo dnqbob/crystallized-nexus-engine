@@ -11,7 +11,6 @@
 
 using System;
 using System.Runtime.InteropServices;
-using OpenRA.Graphics;
 
 namespace OpenRA.Platforms.Default
 {
@@ -20,21 +19,16 @@ namespace OpenRA.Platforms.Default
 	{
 		static readonly int VertexSize = Marshal.SizeOf<T>();
 		uint buffer;
-		uint vao;
 		bool disposed;
 
-		public VertexBuffer(IShaderBindings bindings, int size)
+		// Vertex attribute pointers are (re)configured per-draw-call by Shader.Bind()
+		// against whichever buffer is currently GL_ARRAY_BUFFER-bound, so the bindings
+		// used to create a given buffer don't need to be tracked here.
+		public VertexBuffer(IShaderBindings _, int size)
 		{
-			OpenGL.glGenVertexArrays(1, out vao);
-			OpenGL.CheckGLError();
-			OpenGL.glBindVertexArray(vao);
-			Sdl2GraphicsContext.ActiveVAO = vao;
-			OpenGL.CheckGLError();
-
 			OpenGL.glGenBuffers(1, out buffer);
 			OpenGL.CheckGLError();
-			OpenGL.glBindBuffer(OpenGL.GL_ARRAY_BUFFER, buffer);
-			OpenGL.CheckGLError();
+			Bind();
 
 			// Generates a buffer with uninitialized memory.
 			OpenGL.glBufferData(OpenGL.GL_ARRAY_BUFFER,
@@ -62,34 +56,13 @@ namespace OpenRA.Platforms.Default
 			{
 				ptr.Free();
 			}
-
-			var attributes = bindings.Attributes;
-			for (ushort i = 0; i < attributes.Length; i++)
-			{
-				var attribute = attributes[i];
-				OpenGL.glEnableVertexAttribArray(i);
-
-				if (attribute.Type == ShaderVertexAttributeType.Float)
-					OpenGL.glVertexAttribPointer(i, attribute.Components, OpenGL.GL_FLOAT, false, bindings.Stride, new IntPtr(attribute.Offset));
-				else
-					OpenGL.glVertexAttribIPointer(i, attribute.Components, (int)attribute.Type, bindings.Stride, new IntPtr(attribute.Offset));
-			}
-
-			OpenGL.CheckGLError();
 		}
 
-		public VertexBuffer(IShaderBindings bindings, T[] data, bool dynamic = true)
+		public VertexBuffer(IShaderBindings _, T[] data, bool dynamic = true)
 		{
-			OpenGL.glGenVertexArrays(1, out vao);
-			OpenGL.CheckGLError();
-			OpenGL.glBindVertexArray(vao);
-			Sdl2GraphicsContext.ActiveVAO = vao;
-			OpenGL.CheckGLError();
-
 			OpenGL.glGenBuffers(1, out buffer);
 			OpenGL.CheckGLError();
-			OpenGL.glBindBuffer(OpenGL.GL_ARRAY_BUFFER, buffer);
-			OpenGL.CheckGLError();
+			Bind();
 
 			var ptr = GCHandle.Alloc(data, GCHandleType.Pinned);
 			try
@@ -102,20 +75,6 @@ namespace OpenRA.Platforms.Default
 			finally
 			{
 				ptr.Free();
-			}
-
-			OpenGL.CheckGLError();
-
-			var attributes = bindings.Attributes;
-			for (ushort i = 0; i < attributes.Length; i++)
-			{
-				var attribute = attributes[i];
-				OpenGL.glEnableVertexAttribArray(i);
-
-				if (attribute.Type == ShaderVertexAttributeType.Float)
-					OpenGL.glVertexAttribPointer(i, attribute.Components, OpenGL.GL_FLOAT, false, bindings.Stride, new IntPtr(attribute.Offset));
-				else
-					OpenGL.glVertexAttribIPointer(i, attribute.Components, (int)attribute.Type, bindings.Stride, new IntPtr(attribute.Offset));
 			}
 
 			OpenGL.CheckGLError();
@@ -134,9 +93,6 @@ namespace OpenRA.Platforms.Default
 		public void SetData(T[] data, int offset, int start, int length)
 		{
 			Bind();
-
-			OpenGL.glBindBuffer(OpenGL.GL_ARRAY_BUFFER, buffer);
-			OpenGL.CheckGLError();
 
 			var ptr = GCHandle.Alloc(data, GCHandleType.Pinned);
 			try
@@ -157,25 +113,15 @@ namespace OpenRA.Platforms.Default
 		public void Bind()
 		{
 			VerifyThreadAffinity();
-			if (Sdl2GraphicsContext.ActiveVAO != vao)
-			{
-				OpenGL.glBindVertexArray(vao);
-				Sdl2GraphicsContext.ActiveVAO = vao;
-			}
-
-			OpenGL.CheckGLError();
+			OpenGL.glBindBuffer(OpenGL.GL_ARRAY_BUFFER, buffer);
 		}
 
 		public void Dispose()
 		{
 			if (disposed)
 				return;
-
 			disposed = true;
 			OpenGL.glDeleteBuffers(1, ref buffer);
-			OpenGL.CheckGLError();
-
-			OpenGL.glDeleteVertexArrays(1, ref vao);
 			OpenGL.CheckGLError();
 		}
 	}

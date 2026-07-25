@@ -305,9 +305,6 @@ namespace OpenRA.Platforms.Default
 		public delegate uint CreateShader(int shaderType);
 		public static CreateShader glCreateShader { get; private set; }
 
-		public delegate void DeleteShader(uint shader);
-		public static DeleteShader glDeleteShader { get; private set; }
-
 		public delegate void ShaderSource(uint shader, int count, string[] str, IntPtr length);
 		public static ShaderSource glShaderSource { get; private set; }
 
@@ -483,12 +480,12 @@ namespace OpenRA.Platforms.Default
 		public delegate void BindFramebuffer(int target, uint framebuffer);
 		public static BindFramebuffer glBindFramebuffer { get; private set; }
 
+		public delegate void DrawBuffers(int n, int[] bufs);
+		public static DrawBuffers glDrawBuffers { get; private set; }
+
 		public delegate void FramebufferTexture2D(int target, int attachment,
 			int textarget, uint texture, int level);
 		public static FramebufferTexture2D glFramebufferTexture2D { get; private set; }
-
-		public delegate void DrawBuffers(int n, int[] bufs);
-		public static DrawBuffers glDrawBuffers { get; private set; }
 
 		public delegate void DeleteFramebuffers(int n, ref uint framebuffers);
 		public static DeleteFramebuffers glDeleteFramebuffers { get; private set; }
@@ -595,7 +592,6 @@ namespace OpenRA.Platforms.Default
 				glUseProgram = Bind<UseProgram>("glUseProgram");
 				glGetProgramiv = Bind<GetProgramiv>("glGetProgramiv");
 				glCreateShader = Bind<CreateShader>("glCreateShader");
-				glDeleteShader = Bind<DeleteShader>("glDeleteShader");
 				glShaderSource = Bind<ShaderSource>("glShaderSource");
 				glCompileShader = Bind<CompileShader>("glCompileShader");
 				glGetShaderiv = Bind<GetShaderiv>("glGetShaderiv");
@@ -660,8 +656,8 @@ namespace OpenRA.Platforms.Default
 				glDeleteVertexArrays = Bind<DeleteVertexArrays>("glDeleteVertexArrays");
 				glGenFramebuffers = Bind<GenFramebuffers>("glGenFramebuffers");
 				glBindFramebuffer = Bind<BindFramebuffer>("glBindFramebuffer");
-				glFramebufferTexture2D = Bind<FramebufferTexture2D>("glFramebufferTexture2D");
 				glDrawBuffers = Bind<DrawBuffers>("glDrawBuffers");
+				glFramebufferTexture2D = Bind<FramebufferTexture2D>("glFramebufferTexture2D");
 				glDeleteFramebuffers = Bind<DeleteFramebuffers>("glDeleteFramebuffers");
 				glGenRenderbuffers = Bind<GenRenderbuffers>("glGenRenderbuffers");
 				glBindRenderbuffer = Bind<BindRenderbuffer>("glBindRenderbuffer");

@@ -1,6 +1,6 @@
 Metadata:
 	Title: mod-title
-	Version: cn-20260511
+	Version: {DEV_VERSION}
 	Hidden: true
 
 FileSystem: DefaultFileSystem

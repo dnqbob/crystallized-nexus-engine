@@ -726,24 +726,7 @@ namespace OpenRA
 				if (worldRenderer != null && !worldRenderer.World.IsLoadingGameSave)
 				{
 					Renderer.BeginWorld(worldRenderer.Viewport.CenterLocation, worldRenderer.Viewport.ViewportSize);
-
-					// Place the audio listener above the battlefield. At the default
-					// (most zoomed-out) zoom the elevation matches the long-standing
-					// constant, so the mix is unchanged there. Zooming in lowers the
-					// listener so on-screen action becomes more positional/present.
-					// The factor is clamped to <= 1, so the listener never rises
-					// above the baseline: zooming never makes anything louder than
-					// the zoomed-in state, and off-screen sources never overtake
-					// on-screen ones (the regression that blocked upstream #22121).
-					const int ListenerElevation = 2133;
-					var viewport = worldRenderer.Viewport;
-					var zoom = viewport.Zoom;
-					var minZoom = viewport.MinZoom;
-					var elevation = ListenerElevation;
-					if (zoom > 0f && minZoom > 0f)
-						elevation = (int)(ListenerElevation * Math.Clamp(minZoom / zoom, 0.6f, 1f));
-
-					Sound.SetListenerPosition(viewport.CenterPosition + new WVec(0, 0, elevation));
+					Sound.SetListenerPosition(worldRenderer.Viewport.CenterPosition);
 					using (new PerfSample("render_world"))
 						worldRenderer.Draw();
 				}
@@ -879,45 +862,33 @@ namespace OpenRA
 
 					var haveSomeTimeUntilNextLogic = now < nextLogic;
 					var isTimeToRender = now >= nextRender;
-					if (!Renderer.WindowIsSuspended)
+					if (!Renderer.WindowIsSuspended && ((isTimeToRender && haveSomeTimeUntilNextLogic) || forceRender))
 					{
-						if (isTimeToRender || forceRender)
-						{
-							if (haveSomeTimeUntilNextLogic || forceRender)
-								RenderTick();
+						nextRender = now + renderInterval;
 
-							nextRender = now + renderInterval;
+						// Pick the minimum allowed FPS (the lower between 'minReplayFPS'
+						// and the user's max frame rate) and convert it to maximum time
+						// allowed between screen updates.
+						// We do this before rendering to include the time rendering takes
+						// in this interval.
+						var maxRenderInterval = Math.Max(1000 / MinReplayFps, renderInterval);
+						forcedNextRender = now + maxRenderInterval;
 
-							// Pick the minimum allowed FPS (the lower between 'minReplayFPS'
-							// and the user's max frame rate) and convert it to maximum time
-							// allowed between screen updates.
-							// We do this before rendering to include the time rendering takes
-							// in this interval.
-							var maxRenderInterval = Math.Max(1000 / MinReplayFps, renderInterval);
-							forcedNextRender = now + maxRenderInterval;
-
-							renderBeforeNextTick = false;
-						}
+						RenderTick();
+						renderBeforeNextTick = false;
 					}
-					else
+
+					// Simulate a render tick if it was time to render but we skip actually rendering
+					if (Renderer.WindowIsSuspended && isTimeToRender)
 					{
-						// Simulate a render tick if it was time to render but we skip actually rendering
-						if (isTimeToRender || forceRender)
-						{
-							// Make sure that nextUpdate is set to a proper minimum interval
-							nextRender = now + renderInterval;
+						// Make sure that nextUpdate is set to a proper minimum interval
+						nextRender = now + renderInterval;
 
-							// Still process SDL events to allow a restore to come through
-							Renderer.Window.PumpInput(new NullInputHandler());
+						// Still process SDL events to allow a restore to come through
+						Renderer.Window.PumpInput(new NullInputHandler());
 
-							// Ensure that we still logic tick despite not rendering
-							renderBeforeNextTick = false;
-						}
-						else
-						{
-							// Avoid busy wait.
-							Thread.Sleep((int)(nextRender - now));
-						}
+						// Ensure that we still logic tick despite not rendering
+						renderBeforeNextTick = false;
 					}
 				}
 				else

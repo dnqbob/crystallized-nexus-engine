@@ -25,7 +25,7 @@ flat out float vBloomGlow;
 flat out float vBloomIntensity;
 flat out uint vFullBrightRanges;
 out vec2 vWorldPos;
-	
+
 vec4 SelectChannelMask(uint x)
 {
 	switch (x)

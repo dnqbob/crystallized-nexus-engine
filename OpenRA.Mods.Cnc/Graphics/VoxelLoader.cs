@@ -15,7 +15,6 @@ using System.Linq;
 using OpenRA.FileSystem;
 using OpenRA.Graphics;
 using OpenRA.Mods.Cnc.FileFormats;
-using OpenRA.Mods.Cnc.Traits;
 using OpenRA.Primitives;
 
 namespace OpenRA.Mods.Cnc.Graphics
@@ -27,7 +26,6 @@ namespace OpenRA.Mods.Cnc.Graphics
 		readonly List<ModelVertex[]> vertices = [];
 		readonly Cache<(string, string), Voxel> voxels;
 		readonly IReadOnlyFileSystem fileSystem;
-		readonly ModelRenderer modelRenderer;
 		readonly int sheetSize;
 		IVertexBuffer<ModelVertex> vertexBuffer;
 		int totalVertexCount;
@@ -49,11 +47,10 @@ namespace OpenRA.Mods.Cnc.Graphics
 			return new SheetBuilder(SheetType.Indexed, Allocate);
 		}
 
-		public VoxelLoader(IReadOnlyFileSystem fileSystem, int sheetSize, ModelRenderer modelRenderer)
+		public VoxelLoader(IReadOnlyFileSystem fileSystem, int sheetSize)
 		{
 			this.fileSystem = fileSystem;
 			this.sheetSize = sheetSize;
-			this.modelRenderer = modelRenderer;
 			voxels = new Cache<(string, string), Voxel>(LoadFile);
 			vertices = [];
 			totalVertexCount = 0;
@@ -200,7 +197,7 @@ namespace OpenRA.Mods.Cnc.Graphics
 		public void RefreshBuffer()
 		{
 			vertexBuffer?.Dispose();
-			vertexBuffer = Game.Renderer.CreateVertexBuffer(modelRenderer.Shader.Bindings, vertices.SelectMany(v => v).ToArray(), false);
+			vertexBuffer = Game.Renderer.CreateVertexBuffer(vertices.SelectMany(v => v).ToArray(), false);
 			cachedVertexCount = totalVertexCount;
 		}
 

@@ -1,6 +1,6 @@
 Metadata:
 	Title: mod-title
-	Version: cn-20260511
+	Version: {DEV_VERSION}
 	Website: https://www.openra.net
 	WebIcon32: https://www.openra.net/images/icons/ts_32x32.png
 	WindowTitle: mod-windowtitle
@@ -44,7 +44,7 @@ FileSystem: ContentInstallerFileSystem
 
 MapFolders:
 	ts|maps: System
-	~^SupportDir|maps/ts/cn-20260511: User
+	~^SupportDir|maps/ts/{DEV_VERSION}: User
 
 Rules:
 	ts|rules/ai.yaml
@@ -179,6 +179,7 @@ ChromeLayout:
 FluentMessages:
 	common|fluent/common.ftl
 	common|fluent/chrome.ftl
+	common|fluent/ingame-debug.ftl
 	common|fluent/hotkeys.ftl
 	common|fluent/rules.ftl
 	ts|fluent/ts.ftl

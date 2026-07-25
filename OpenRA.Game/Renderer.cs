@@ -114,16 +114,15 @@ namespace OpenRA
 			Context = Window.Context;
 
 			var combinedBindings = new CombinedShaderBindings();
-			tempVertexBuffer = Context.CreateEmptyVertexBuffer<Vertex>(combinedBindings, TempVertexBufferSize);
-			quadIndexBuffer = Context.CreateIndexBuffer(Util.CreateQuadIndices(TempIndexBufferSize / 6));
-
-			WorldSpriteRenderer = new SpriteRenderer(this, tempVertexBuffer, quadIndexBuffer, Context.CreateShader(combinedBindings));
+			WorldSpriteRenderer = new SpriteRenderer(this, Context.CreateShader(combinedBindings));
 			WorldRgbaSpriteRenderer = new RgbaSpriteRenderer(WorldSpriteRenderer);
 			WorldRgbaColorRenderer = new RgbaColorRenderer(WorldSpriteRenderer);
-			SpriteRenderer = new SpriteRenderer(this, tempVertexBuffer, quadIndexBuffer, Context.CreateShader(combinedBindings));
+			SpriteRenderer = new SpriteRenderer(this, Context.CreateShader(combinedBindings));
 			RgbaSpriteRenderer = new RgbaSpriteRenderer(SpriteRenderer);
 			RgbaColorRenderer = new RgbaColorRenderer(SpriteRenderer);
 
+			tempVertexBuffer = Context.CreateEmptyVertexBuffer<Vertex>(combinedBindings, TempVertexBufferSize);
+			quadIndexBuffer = Context.CreateIndexBuffer(Util.CreateQuadIndices(TempIndexBufferSize / 6));
 			bufferSnapshot = Context.CreateTexture();
 			bloomGlowRenderer = new BloomGlowRenderer(this);
 		}
@@ -237,7 +236,7 @@ namespace OpenRA
 				glowPingBuffer?.Dispose();
 
 				// If enableWorldFrameBufferDownscale and the world is more than twice the size of the final output size do we allow it to be downsampled!
-				worldBuffer = Context.CreateFrameBuffer(worldBufferSize, Color.FromArgb(0));
+				worldBuffer = Context.CreateFrameBuffer(worldBufferSize);
 
 				// Bloom-glow ping-pong buffers - same size and same projection,
 				// populated by a second pass of the world geometry with
@@ -287,6 +286,13 @@ namespace OpenRA
 				// We need to add 1 to scroll in order to handle interpixel 0-0.99 fractionalOffset.
 				var s = new Size(vw / WorldDownscaleFactor + 1, vh / WorldDownscaleFactor + 1);
 				var fractionalOffset = centerLocation - viewportLocation;
+
+				// If scaling by an integer factor (including 1:1) we must round the offset
+				// to an integer number of screen-space pixels to preserve sharp pixel edges
+				var renderScale = screenSprite.Size.X / (s.Width - 1f);
+				if (float.IsInteger(renderScale))
+					fractionalOffset = (fractionalOffset * renderScale).Round() / renderScale;
+
 				worldSprite = new Sprite(worldSheet, new Rectangle(int2.Zero, s), 0, fractionalOffset, TextureChannel.RGBA);
 			}
 
@@ -447,10 +453,17 @@ namespace OpenRA
 			PerfHistory.Increment("batches", 1);
 		}
 
-		public void DrawQuadBatch<T>(IVertexBuffer<T> vertices, IShader shader, int numIndices, int start)
+		public void DrawQuadBatch(ref Vertex[] vertices, IShader shader, int numVertices)
+		{
+			tempVertexBuffer.SetData(ref vertices, numVertices);
+			DrawQuadBatch(tempVertexBuffer, quadIndexBuffer, shader, numVertices / 4 * 6, 0);
+		}
+
+		public void DrawQuadBatch<T>(IVertexBuffer<T> vertices, IIndexBuffer indices, IShader shader, int numIndices, int start)
 			where T : struct
 		{
 			vertices.Bind();
+			indices.Bind();
 			shader.Bind();
 			Context.DrawElements(numIndices, start);
 			PerfHistory.Increment("batches", 1);
@@ -497,6 +510,11 @@ namespace OpenRA
 		public IVertexBuffer<T> CreateVertexBuffer<T>(IShaderBindings bindings, T[] data, bool dynamic) where T : struct
 		{
 			return Context.CreateVertexBuffer(bindings, data, dynamic);
+		}
+
+		public IVertexBuffer<T> CreateVertexBuffer<T>(T[] data, bool dynamic) where T : struct
+		{
+			return Context.CreateVertexBuffer(data, dynamic);
 		}
 
 		public void EnableScissor(Rectangle rect)
