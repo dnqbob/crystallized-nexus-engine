@@ -11,7 +11,6 @@
 
 using System;
 using System.Runtime.InteropServices;
-using OpenRA.Graphics;
 
 namespace OpenRA.Platforms.Default
 {
@@ -25,7 +24,7 @@ namespace OpenRA.Platforms.Default
 		// Vertex attribute pointers are (re)configured per-draw-call by Shader.Bind()
 		// against whichever buffer is currently GL_ARRAY_BUFFER-bound, so the bindings
 		// used to create a given buffer don't need to be tracked here.
-		public VertexBuffer(IShaderBindings bindings, int size)
+		public VertexBuffer(IShaderBindings _, int size)
 		{
 			OpenGL.glGenBuffers(1, out buffer);
 			OpenGL.CheckGLError();
@@ -59,7 +58,7 @@ namespace OpenRA.Platforms.Default
 			}
 		}
 
-		public VertexBuffer(IShaderBindings bindings, T[] data, bool dynamic = true)
+		public VertexBuffer(IShaderBindings _, T[] data, bool dynamic = true)
 		{
 			OpenGL.glGenBuffers(1, out buffer);
 			OpenGL.CheckGLError();

@@ -47,12 +47,12 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		// The "cn" mod replaces the generic 0-95% handicap slider with named difficulty tiers.
 		// Values are arbitrary indices (not percentages) consumed by the mod's own handicap traits.
 		static readonly (int Value, string Label)[] CnHandicapTiers =
-		{
+		[
 			(1, "Easy"),
 			(0, "Normal"),
 			(2, "Hard"),
 			(3, "Brutal"),
-		};
+		];
 
 		static bool UseCnHandicapTiers => Game.ModData?.Manifest.Id == "cn";
 

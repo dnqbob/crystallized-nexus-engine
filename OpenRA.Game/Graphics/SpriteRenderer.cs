@@ -24,7 +24,9 @@ namespace OpenRA.Graphics
 
 		readonly Renderer renderer;
 		public IShader Shader => shader;
+#pragma warning disable IDE0032 // Use auto property - shader is used directly (not via the property) throughout this file
 		readonly IShader shader;
+#pragma warning restore IDE0032
 
 		Vertex[] vertices;
 		readonly Sheet[] sheets = new Sheet[SheetCount];

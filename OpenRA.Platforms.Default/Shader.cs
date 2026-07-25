@@ -25,7 +25,9 @@ namespace OpenRA.Platforms.Default
 		readonly Dictionary<string, int> uniformCache = [];
 		readonly Dictionary<int, ITexture> textures = [];
 		readonly Queue<int> unbindTextures = [];
+#pragma warning disable IDE0032 // Use auto property - bindings is used directly (not via the property) throughout this file
 		readonly IShaderBindings bindings;
+#pragma warning restore IDE0032
 		readonly uint program;
 		bool disposed;
 

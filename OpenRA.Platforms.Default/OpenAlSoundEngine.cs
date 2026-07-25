@@ -312,7 +312,7 @@ namespace OpenRA.Platforms.Default
 
 		public void SetSoundVolume(float volume, IEnumerable<ISound> excluded)
 		{
-			var excludedSources = new HashSet<uint>(excluded?.Select(s => ((OpenAlSound)s).Source) ?? Enumerable.Empty<uint>());
+			var excludedSources = new HashSet<uint>(excluded?.Select(s => ((OpenAlSound)s).Source) ?? []);
 			var sounds = sourcePool.Keys.Where(key =>
 			{
 				AL10.alGetSourcei(key, AL10.AL_SOURCE_STATE, out var state);
