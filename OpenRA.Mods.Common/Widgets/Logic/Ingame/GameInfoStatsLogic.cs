@@ -245,6 +245,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 					var nameLabel = item.Get<LabelWithTooltipWidget>("NAME");
 					WidgetUtils.BindPlayerNameAndStatus(nameLabel, pp);
 					nameLabel.GetColor = () => pp.Color;
+					nameLabel.IsStrikethroughVisible = () => pp.WinState == WinState.Lost;
 
 					var flag = item.Get<ImageWidget>("FACTIONFLAG");
 					flag.GetImageCollection = () => "flags";

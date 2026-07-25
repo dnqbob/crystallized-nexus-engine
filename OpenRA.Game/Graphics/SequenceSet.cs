@@ -26,6 +26,8 @@ namespace OpenRA.Graphics
 		int ShadowZOffset { get; }
 		Rectangle Bounds { get; }
 		bool IgnoreWorldTint { get; }
+		bool BloomGlow { get; }
+		float BloomGlowIntensity { get; }
 		float Scale { get; }
 		void ResolveSprites(SpriteCache cache);
 		Sprite GetSprite(int frame);

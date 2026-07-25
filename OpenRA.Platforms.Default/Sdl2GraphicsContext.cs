@@ -49,16 +49,26 @@ namespace OpenRA.Platforms.Default
 			OpenGL.CheckGLError();
 		}
 
-		public IVertexBuffer<T> CreateEmptyVertexBuffer<T>(int size) where T : struct
+		public IVertexBuffer<T> CreateEmptyVertexBuffer<T>(IShaderBindings bindings, int size) where T : struct
 		{
 			VerifyThreadAffinity();
-			return new VertexBuffer<T>(size);
+			return new VertexBuffer<T>(bindings, size);
+		}
+
+		public IVertexBuffer<T> CreateVertexBuffer<T>(IShaderBindings bindings, T[] data, bool dynamic = true) where T : struct
+		{
+			VerifyThreadAffinity();
+			return new VertexBuffer<T>(bindings, data, dynamic);
+		}
+
+		public IVertexBuffer<T> CreateEmptyVertexBuffer<T>(int size) where T : struct
+		{
+			return CreateEmptyVertexBuffer<T>(null, size);
 		}
 
 		public IVertexBuffer<T> CreateVertexBuffer<T>(T[] data, bool dynamic = true) where T : struct
 		{
-			VerifyThreadAffinity();
-			return new VertexBuffer<T>(data, dynamic);
+			return CreateVertexBuffer(null, data, dynamic);
 		}
 
 		public IIndexBuffer CreateIndexBuffer(uint[] indices)
@@ -89,6 +99,12 @@ namespace OpenRA.Platforms.Default
 		{
 			VerifyThreadAffinity();
 			return new FrameBuffer(s, new Texture(), clearColor);
+		}
+
+		public IFrameBuffer CreateFrameBuffer(Size s, Color clearColor, bool withSecondaryColor)
+		{
+			VerifyThreadAffinity();
+			return new FrameBuffer(s, new Texture(), withSecondaryColor ? new Texture() : null, clearColor);
 		}
 
 		public IFrameBuffer CreateFrameBuffer(Size s, ITextureInternal texture, Color clearColor)
@@ -179,11 +195,15 @@ namespace OpenRA.Platforms.Default
 			OpenGL.CheckGLError();
 		}
 
-		public void EnableDepthBuffer()
+		public void EnableDepthBuffer(bool clear = true)
 		{
 			VerifyThreadAffinity();
-			OpenGL.glClear(OpenGL.GL_DEPTH_BUFFER_BIT);
-			OpenGL.CheckGLError();
+			if (clear)
+			{
+				OpenGL.glClear(OpenGL.GL_DEPTH_BUFFER_BIT);
+				OpenGL.CheckGLError();
+			}
+
 			OpenGL.glEnable(OpenGL.GL_DEPTH_TEST);
 			OpenGL.CheckGLError();
 			OpenGL.glDepthFunc(OpenGL.GL_LEQUAL);
@@ -210,6 +230,10 @@ namespace OpenRA.Platforms.Default
 			OpenGL.glBlendEquation(OpenGL.GL_FUNC_ADD);
 			OpenGL.CheckGLError();
 
+			// Restore depth writing only for opaque/alpha modes
+			if (mode != BlendMode.Overlay && mode != BlendMode.Additive && mode != BlendMode.Subtractive)
+				OpenGL.glDepthMask(true);
+
 			switch (mode)
 			{
 				case BlendMode.None:
@@ -231,6 +255,7 @@ namespace OpenRA.Platforms.Default
 						OpenGL.glBlendEquationSeparate(OpenGL.GL_FUNC_REVERSE_SUBTRACT, OpenGL.GL_FUNC_ADD);
 					}
 
+					OpenGL.glDepthMask(false);
 					break;
 				case BlendMode.Multiply:
 					OpenGL.glEnable(OpenGL.GL_BLEND);
@@ -262,6 +287,13 @@ namespace OpenRA.Platforms.Default
 					OpenGL.glEnable(OpenGL.GL_BLEND);
 					OpenGL.CheckGLError();
 					OpenGL.glBlendFunc(OpenGL.GL_DST_COLOR, OpenGL.GL_ONE_MINUS_DST_COLOR);
+					break;
+				case BlendMode.Overlay:
+					OpenGL.glEnable(OpenGL.GL_BLEND);
+					OpenGL.CheckGLError();
+					OpenGL.glBlendFuncSeparate(OpenGL.GL_DST_COLOR, OpenGL.GL_ONE_MINUS_SRC_ALPHA, OpenGL.GL_ZERO, OpenGL.GL_ONE);
+					OpenGL.CheckGLError();
+					OpenGL.glDepthMask(false);
 					break;
 			}
 

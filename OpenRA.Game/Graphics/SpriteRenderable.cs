@@ -22,9 +22,13 @@ namespace OpenRA.Graphics
 		readonly WPos pos;
 		readonly float scale;
 		readonly WAngle rotation = WAngle.Zero;
+		readonly bool flipY;
+		readonly uint fullBrightPaletteRanges;
+		readonly float bloomIntensity;
 
 		public SpriteRenderable(Sprite sprite, WPos pos, WVec offset, int zOffset, PaletteReference palette, float scale, float alpha,
-			float3 tint, TintModifiers tintModifiers, bool isDecoration, WAngle rotation)
+			float3 tint, TintModifiers tintModifiers, bool isDecoration, WAngle rotation, bool flipY = false, uint fullBrightPaletteRanges = 0,
+			bool isShadow = false, float bloomIntensity = 1f)
 		{
 			this.sprite = sprite;
 			this.pos = pos;
@@ -33,8 +37,12 @@ namespace OpenRA.Graphics
 			Palette = palette;
 			this.scale = scale;
 			this.rotation = rotation;
+			this.flipY = flipY;
+			this.fullBrightPaletteRanges = fullBrightPaletteRanges;
+			this.bloomIntensity = bloomIntensity;
 			Tint = tint;
 			IsDecoration = isDecoration;
+			IsShadow = isShadow;
 			TintModifiers = tintModifiers;
 			Alpha = alpha;
 
@@ -54,6 +62,7 @@ namespace OpenRA.Graphics
 		public PaletteReference Palette { get; }
 		public int ZOffset { get; }
 		public bool IsDecoration { get; }
+		public bool IsShadow { get; }
 
 		public float Alpha { get; }
 		public float3 Tint { get; }
@@ -61,32 +70,59 @@ namespace OpenRA.Graphics
 
 		public IPalettedRenderable WithPalette(PaletteReference newPalette)
 		{
-			return new SpriteRenderable(sprite, pos, Offset, ZOffset, newPalette, scale, Alpha, Tint, TintModifiers, IsDecoration, rotation);
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, newPalette, scale, Alpha, Tint, TintModifiers,
+				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity);
 		}
 
 		public IRenderable WithZOffset(int newOffset)
 		{
-			return new SpriteRenderable(sprite, pos, Offset, newOffset, Palette, scale, Alpha, Tint, TintModifiers, IsDecoration, rotation);
+			return new SpriteRenderable(sprite, pos, Offset, newOffset, Palette, scale, Alpha, Tint, TintModifiers,
+				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity);
 		}
 
 		public IRenderable OffsetBy(in WVec vec)
 		{
-			return new SpriteRenderable(sprite, pos + vec, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers, IsDecoration, rotation);
+			return new SpriteRenderable(sprite, pos + vec, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers,
+				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity);
 		}
 
 		public IRenderable AsDecoration()
 		{
-			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers, true, rotation);
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers,
+				true, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity);
+		}
+
+		public IRenderable AsShadow()
+		{
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers,
+				IsDecoration, rotation, flipY, fullBrightPaletteRanges, true, bloomIntensity);
 		}
 
 		public IModifyableRenderable WithAlpha(float newAlpha)
 		{
-			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, newAlpha, Tint, TintModifiers, IsDecoration, rotation);
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, newAlpha, Tint, TintModifiers,
+				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity);
 		}
 
 		public IModifyableRenderable WithTint(in float3 newTint, TintModifiers newTintModifiers)
 		{
-			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, newTint, newTintModifiers, IsDecoration, rotation);
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, newTint, newTintModifiers,
+				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity);
+		}
+
+		public SpriteRenderable WithYFlip()
+		{
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers,
+				IsDecoration, rotation, true, fullBrightPaletteRanges, IsShadow, bloomIntensity);
+		}
+
+		public SpriteRenderable WithFullBrightOnly(uint paletteRanges, float bloomIntensity = 1f)
+		{
+			// Fold the per-sequence bloom multiplier (carried on this renderable) into the
+			// per-actor one passed by the caller so a single sequence can be dimmed even when
+			// the glow comes from the full-bright palette path rather than the BloomGlow flag.
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint,
+				TintModifiers | TintModifiers.IgnoreWorldTint, IsDecoration, rotation, flipY, paletteRanges, IsShadow, this.bloomIntensity * bloomIntensity);
 		}
 
 		float3 ScreenPosition(WorldRenderer wr)
@@ -99,8 +135,10 @@ namespace OpenRA.Graphics
 		public void Render(WorldRenderer wr)
 		{
 			var wsr = Game.Renderer.WorldSpriteRenderer;
+			var ignoreWorldTint = (TintModifiers & TintModifiers.IgnoreWorldTint) != 0;
+			var isBloomSource = (TintModifiers & TintModifiers.BloomGlow) != 0;
 			var t = Alpha * Tint;
-			if (wr.TerrainLighting != null && (TintModifiers & TintModifiers.IgnoreWorldTint) == 0)
+			if (wr.TerrainLighting != null && !ignoreWorldTint)
 				t *= wr.TerrainLighting.TintAt(pos);
 
 			// Shader interprets negative alpha as a flag to use the tint colour directly instead of multiplying the sprite colour
@@ -108,7 +146,13 @@ namespace OpenRA.Graphics
 			if ((TintModifiers & TintModifiers.ReplaceColor) != 0)
 				a *= -1;
 
-			wsr.DrawSprite(sprite, Palette, ScreenPosition(wr), scale, t, a, rotation.RendererRadians());
+			if (flipY)
+				wsr.DrawSprite(sprite, Palette, ScreenPosition(wr) + new float3(0, scale * sprite.Size.Y, 0),
+					new float3(scale, -scale, scale), t, a, rotation.RendererRadians(), ignoreWorldTint, fullBrightPaletteRanges, isBloomSource,
+					bloomIntensity);
+			else
+				wsr.DrawSprite(sprite, Palette, ScreenPosition(wr), scale, t, a, rotation.RendererRadians(), ignoreWorldTint, fullBrightPaletteRanges,
+					isBloomSource, bloomIntensity);
 		}
 
 		public void RenderDebugGeometry(WorldRenderer wr)

@@ -26,7 +26,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 	}
 
 	[Desc("Render trait fundament that won't work without additional With* render traits.")]
-	public class RenderSpritesInfo : TraitInfo, IRenderActorPreviewInfo
+	public class RenderSpritesInfo : TraitInfo, IRenderActorPreviewInfo, IRulesetLoaded
 	{
 		[Desc("The sequence name that defines the actor sprites. Defaults to the actor name.")]
 		public readonly string Image = null;
@@ -42,7 +42,41 @@ namespace OpenRA.Mods.Common.Traits.Render
 		[Desc("Custom PlayerColorPalette: BaseName")]
 		public readonly string PlayerPalette = "player";
 
+		[Desc("Palette index ranges to render as an un-tinted overlay for this actor. Example: 1, 15, 240, 255.")]
+		public readonly int2[] FullBrightPaletteIndexRanges = [];
+
+		[Desc("Bloom multiplier for the full-bright overlay. 0 disables bloom while keeping the overlay visible; 1 is default.")]
+		public readonly float BloomGlowIntensity = 1f;
+
+		public uint FullBrightPaletteRangeMask { get; private set; }
+
 		public override object Create(ActorInitializer init) { return new RenderSprites(init, this); }
+
+		void IRulesetLoaded<ActorInfo>.RulesetLoaded(Ruleset rules, ActorInfo ai)
+		{
+			if (FullBrightPaletteIndexRanges.Length > 2)
+				throw new YamlException($"{nameof(FullBrightPaletteIndexRanges)} supports at most two palette index ranges.");
+
+			foreach (var range in FullBrightPaletteIndexRanges)
+			{
+				if (range.X < 0 || range.X > 255 || range.Y < 0 || range.Y > 255 || range.Y < range.X)
+					throw new YamlException($"{nameof(FullBrightPaletteIndexRanges)} must use valid ranges between 0 and 255.");
+			}
+
+			if (BloomGlowIntensity < 0f)
+				throw new YamlException($"{nameof(BloomGlowIntensity)} must be greater than or equal to 0.");
+
+			FullBrightPaletteRangeMask = PackFullBrightPaletteRanges(FullBrightPaletteIndexRanges);
+		}
+
+		static uint PackFullBrightPaletteRanges(int2[] ranges)
+		{
+			var mask = 0u;
+			for (var i = 0; i < ranges.Length; i++)
+				mask |= (uint)(ranges[i].X | ranges[i].Y << 8) << (16 * i);
+
+			return mask;
+		}
 
 		public IEnumerable<IActorPreview> RenderPreview(ActorPreviewInitializer init)
 		{
@@ -160,7 +194,7 @@ namespace OpenRA.Mods.Common.Traits.Render
 		{
 			Info = info;
 			faction = init.GetValue<FactionInit, string>(init.Self.Owner.Faction.InternalName);
-			renderables = RenderAnimations(anims, init.Self);
+			renderables = RenderAnimations(anims, init.Self, info.FullBrightPaletteRangeMask, info.BloomGlowIntensity);
 		}
 
 		public string GetImage(Actor self)
@@ -199,7 +233,8 @@ namespace OpenRA.Mods.Common.Traits.Render
 			return renderables;
 		}
 
-		static IEnumerable<IRenderable> RenderAnimations(List<AnimationWrapper> anims, Actor self)
+		static IEnumerable<IRenderable> RenderAnimations(List<AnimationWrapper> anims, Actor self, uint fullBrightPaletteRanges,
+			float bloomGlowIntensity)
 		{
 			foreach (var a in anims)
 			{
@@ -207,7 +242,12 @@ namespace OpenRA.Mods.Common.Traits.Render
 					continue;
 
 				foreach (var r in a.Animation.Render(self, a.PaletteReference))
+				{
 					yield return r;
+
+					if (fullBrightPaletteRanges != 0 && r is SpriteRenderable sr)
+						yield return sr.WithFullBrightOnly(fullBrightPaletteRanges, bloomGlowIntensity);
+				}
 			}
 		}
 

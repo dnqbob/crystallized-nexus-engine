@@ -68,6 +68,15 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		[FluentReference]
 		const string Disabled = "options-target-lines.disabled";
 
+		[FluentReference]
+		const string GradingOff = "options-atmosphere.off";
+
+		[FluentReference]
+		const string GradingCinematic = "options-atmosphere.cinematic";
+
+		[FluentReference]
+		const string GradingToxHaze = "options-atmosphere.tox-haze";
+
 		[FluentReference("fps")]
 		const string FrameLimiter = "checkbox-frame-limiter";
 
@@ -97,6 +106,9 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		readonly string automatic;
 		readonly string manual;
 		readonly string disabled;
+		readonly string gradingOff;
+		readonly string gradingCinematic;
+		readonly string gradingToxHaze;
 
 		readonly string legacyFullscreen;
 		readonly string fullscreen;
@@ -124,6 +136,10 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			automatic = FluentProvider.GetMessage(Automatic);
 			manual = FluentProvider.GetMessage(Manual);
 			disabled = FluentProvider.GetMessage(Disabled);
+
+			gradingOff = FluentProvider.GetMessage(GradingOff);
+			gradingCinematic = FluentProvider.GetMessage(GradingCinematic);
+			gradingToxHaze = FluentProvider.GetMessage(GradingToxHaze);
 		}
 
 		public static string GetViewportSizeName(ModData modData, WorldViewport worldViewport)
@@ -148,6 +164,12 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			var world = worldRenderer.World;
 			var scrollPanel = panel.Get<ScrollPanelWidget>("SETTINGS_SCROLLPANEL");
 
+			SettingsUtils.BindCheckboxPref(panel, "WATER_EFFECTS_CHECKBOX", graphicSettings, "WaterEffects");
+			SettingsUtils.BindCheckboxPref(panel, "CLOUD_SHADOWS_CHECKBOX", graphicSettings, "CloudShadows");
+			SettingsUtils.BindCheckboxPref(panel, "TIBERIUM_EFFECTS_CHECKBOX", graphicSettings, "TiberiumEffects");
+			SettingsUtils.BindCheckboxPref(panel, "BLOOM_GLOW_CHECKBOX", graphicSettings, "BloomGlowEffects");
+			SettingsUtils.BindCheckboxPref(panel, "VOXEL_DYNAMICS_CHECKBOX", graphicSettings, "VoxelDynamics");
+			SettingsUtils.BindCheckboxPref(panel, "SCREEN_SHAKE_CHECKBOX", graphicSettings, "ScreenShake");
 			SettingsUtils.BindCheckboxPref(panel, "CURSORDOUBLE_CHECKBOX", graphicSettings, "CursorDouble");
 			SettingsUtils.BindCheckboxPref(panel, "VSYNC_CHECKBOX", graphicSettings, "VSync");
 			SettingsUtils.BindCheckboxPref(panel, "FRAME_LIMIT_CHECKBOX", graphicSettings, "CapFramerate");
@@ -206,6 +228,14 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			battlefieldCameraDropDown.OnMouseDown = _ => ShowBattlefieldCameraDropdown(modData, battlefieldCameraDropDown, viewportSizes, graphicSettings);
 			battlefieldCameraDropDown.GetText = () => battlefieldCameraLabel.Update(graphicSettings.ViewportDistance);
 
+			var gradingDropdown = panel.Get<DropDownButtonWidget>("GRADING_DROPDOWN");
+			gradingDropdown.OnMouseDown = _ => ShowGradingDropdown(gradingDropdown, graphicSettings);
+			gradingDropdown.GetText = () => graphicSettings.PostProcessGrading == GradingMode.Off
+				? gradingOff
+				: graphicSettings.PostProcessGrading == GradingMode.ToxHaze
+					? gradingToxHaze
+					: gradingCinematic;
+
 			BindTextNotificationPoolFilterSettings(panel, gameSettings);
 
 			// Update vsync immediately
@@ -223,7 +253,10 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			uiScaleDropdown.GetText = () => uiScaleLabel.Update(graphicSettings.UIScale);
 
 			var minResolution = viewportSizes.MinEffectiveResolution;
-			var resolution = Game.Renderer.Resolution;
+
+			// Use physical pixels (SurfaceSize) so OS DPI Scale != 100% does not disable the UI scale option
+			var resolution = Game.Renderer.SurfaceSize;
+
 			var disableUIScale = world.Type != WorldType.Shellmap ||
 				resolution.Width * graphicSettings.UIScale < 1.25f * minResolution.Width ||
 				resolution.Height * graphicSettings.UIScale < 1.25f * minResolution.Height;
@@ -468,6 +501,28 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			dropdown.ShowDropDown("LABEL_DROPDOWN_TEMPLATE", 500, options.Keys, SetupItem);
 		}
 
+		static void ShowGradingDropdown(DropDownButtonWidget dropdown, GraphicSettings graphicSettings)
+		{
+			var options = new Dictionary<string, GradingMode>()
+			{
+				{ FluentProvider.GetMessage(GradingOff), GradingMode.Off },
+				{ FluentProvider.GetMessage(GradingCinematic), GradingMode.Cinematic },
+				{ FluentProvider.GetMessage(GradingToxHaze), GradingMode.ToxHaze },
+			};
+
+			ScrollItemWidget SetupItem(string o, ScrollItemWidget itemTemplate)
+			{
+				var item = ScrollItemWidget.Setup(itemTemplate,
+					() => graphicSettings.PostProcessGrading == options[o],
+					() => graphicSettings.PostProcessGrading = options[o]);
+
+				item.Get<LabelWidget>("LABEL").GetText = () => o;
+				return item;
+			}
+
+			dropdown.ShowDropDown("LABEL_DROPDOWN_TEMPLATE", 500, options.Keys, SetupItem);
+		}
+
 		public static void ShowBattlefieldCameraDropdown(ModData modData, DropDownButtonWidget dropdown,
 			WorldViewportSizes viewportSizes, GraphicSettings graphicSettings)
 		{
@@ -482,17 +537,21 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				return item;
 			}
 
-			var windowHeight = Game.Renderer.NativeResolution.Height;
+			// SurfaceSize (physical pixels) is used for Close/Medium/Far
+			// so that OS DPI scale does not limit viewport distances
+			// Native/Furthest keeps NativeResolution (DPI-normalised)
+			var nativeHeight = Game.Renderer.NativeResolution.Height;
+			var surfaceHeight = Game.Renderer.SurfaceSize.Height;
 
 			var validSizes = new List<WorldViewport>() { WorldViewport.Close };
-			if (viewportSizes.GetSizeRange(WorldViewport.Medium).X < windowHeight)
+			if (viewportSizes.GetSizeRange(WorldViewport.Medium).X < surfaceHeight)
 				validSizes.Add(WorldViewport.Medium);
 
 			var farRange = viewportSizes.GetSizeRange(WorldViewport.Far);
-			if (farRange.X < windowHeight)
+			if (farRange.X < surfaceHeight)
 				validSizes.Add(WorldViewport.Far);
 
-			if (viewportSizes.AllowNativeZoom && farRange.Y < windowHeight)
+			if (viewportSizes.AllowNativeZoom && farRange.Y < nativeHeight)
 				validSizes.Add(WorldViewport.Native);
 
 			dropdown.ShowDropDown("LABEL_DROPDOWN_TEMPLATE", 500, validSizes, SetupItem);
@@ -565,7 +624,8 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			}
 
 			var viewportSizes = Game.ModData.GetOrCreate<WorldViewportSizes>();
-			var maxScales = new float2(Game.Renderer.NativeResolution) / new float2(viewportSizes.MinEffectiveResolution);
+			// Use physical pixels (SurfaceSize) so UI scale option is available also for users using OS DPI Scale != 100%
+			var maxScales = new float2(Game.Renderer.SurfaceSize) / new float2(viewportSizes.MinEffectiveResolution);
 			var maxScale = Math.Min(maxScales.X, maxScales.Y);
 
 			var validScales = new[] { 1f, 1.25f, 1.5f, 1.75f, 2f }.Where(x => x <= maxScale);

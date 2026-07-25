@@ -149,7 +149,7 @@ menu-game-info =
     .objectives = Objectives
     .briefing = Briefing
     .options = Options
-    .debug = Cheats
+    .debug = Debug
     .chat = Chat
 
 ## GameInfoObjectivesLogic, GameInfoStatsLogic
@@ -366,6 +366,11 @@ options-target-lines =
     .manual = Manual
     .disabled = Disabled
 
+options-atmosphere =
+    .off = Off
+    .cinematic = Cinematic
+    .tox-haze = Tox Haze
+
 checkbox-frame-limiter = Enable Frame Limiter ({ $fps } FPS)
 
 ## HotkeysSettingsLogic
@@ -477,6 +482,9 @@ label-player-count =
        *[other] { $players } Players
     }
 label-map-size-huge = Huge
+label-map-size-giant = Giant
+label-map-size-epic = Epic
+label-map-size-ludicrous = Ludicrous
 label-map-size-large = Large
 label-map-size-medium = Medium
 label-map-size-small = Small

@@ -11,6 +11,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using OpenRA.Primitives;
@@ -38,12 +39,13 @@ namespace OpenRA.Platforms.Default
 		Func<object> doClear;
 		Action doClearDepthBuffer;
 		Action doDisableDepthBuffer;
-		Action doEnableDepthBuffer;
+		Action<object> doEnableDepthBuffer;
 		Action doDisableScissor;
 		Action doPresent;
 		Func<string> getGLVersion;
 		Func<ITexture> getCreateTexture;
 		Func<object, IFrameBuffer> getCreateFrameBuffer;
+		Func<object, IFrameBuffer> getCreateFrameBufferWithSecondaryColor;
 		Func<object, IShader> getCreateShader;
 		Func<object, object> getCreateEmptyVertexBuffer;
 		Func<object, object> getCreateVertexBuffer;
@@ -84,7 +86,7 @@ namespace OpenRA.Platforms.Default
 					doClear = () => { context.Clear(); return null; };
 					doClearDepthBuffer = context.ClearDepthBuffer;
 					doDisableDepthBuffer = context.DisableDepthBuffer;
-					doEnableDepthBuffer = context.EnableDepthBuffer;
+					doEnableDepthBuffer = clear => context.EnableDepthBuffer((bool)clear);
 					doDisableScissor = context.DisableScissor;
 					doPresent = context.Present;
 					getGLVersion = () => context.GLVersion;
@@ -96,26 +98,34 @@ namespace OpenRA.Platforms.Default
 							return new ThreadedFrameBuffer(this,
 								context.CreateFrameBuffer(t.Item1, (ITextureInternal)CreateTexture(), t.Item2));
 						};
+					getCreateFrameBufferWithSecondaryColor =
+						tuple =>
+						{
+							var t = ((Size, Color, bool))tuple;
+							return new ThreadedFrameBuffer(this, context.CreateFrameBuffer(t.Item1, t.Item2, t.Item3));
+						};
 					getCreateShader = bindings => new ThreadedShader(this, context.CreateShader((IShaderBindings)bindings));
 					getCreateEmptyVertexBuffer =
 						tuple =>
 						{
-							(object t, var type) = ((int, Type))tuple;
-							var vertexBuffer = context.GetType()
-								.GetMethod(nameof(CreateEmptyVertexBuffer))
+							(var bindings, object t, var type) = ((IShaderBindings, int, Type))tuple;
+							var method = context.GetType().GetMethods()
+								.First(m => m.Name == nameof(CreateEmptyVertexBuffer) && m.GetParameters().Length == 2);
+							var vertexBuffer = method
 								.MakeGenericMethod(type)
-								.Invoke(context, [t]);
+								.Invoke(context, [bindings, t]);
 
 							return typeof(ThreadedVertexBuffer<>).MakeGenericType(type).GetConstructors()[0].Invoke([this, vertexBuffer]);
 						};
 					getCreateVertexBuffer =
 						tuple =>
 						{
-							var (array, dynamic, type) = ((object, bool, Type))tuple;
-							var vertexBuffer = context.GetType()
-								.GetMethod(nameof(CreateVertexBuffer))
+							var (bindings, array, dynamic, type) = ((IShaderBindings, object, bool, Type))tuple;
+							var method = context.GetType().GetMethods()
+								.First(m => m.Name == nameof(CreateVertexBuffer) && m.GetParameters().Length == 3);
+							var vertexBuffer = method
 								.MakeGenericMethod(type)
-								.Invoke(context, [array, dynamic]);
+								.Invoke(context, [bindings, array, dynamic]);
 							return typeof(ThreadedVertexBuffer<>).MakeGenericType(type).GetConstructors()[0].Invoke([this, vertexBuffer]);
 						};
 					getCreateIndexBuffer = indices => new ThreadedIndexBuffer(this, context.CreateIndexBuffer((uint[])indices));
@@ -431,6 +441,11 @@ namespace OpenRA.Platforms.Default
 			return Send(getCreateFrameBuffer, (s, clearColor));
 		}
 
+		public IFrameBuffer CreateFrameBuffer(Size s, Color clearColor, bool withSecondaryColor)
+		{
+			return Send(getCreateFrameBufferWithSecondaryColor, (s, clearColor, withSecondaryColor));
+		}
+
 		public IShader CreateShader(IShaderBindings bindings)
 		{
 			return Send(getCreateShader, bindings);
@@ -441,14 +456,24 @@ namespace OpenRA.Platforms.Default
 			return Send(getCreateTexture);
 		}
 
+		public IVertexBuffer<T> CreateEmptyVertexBuffer<T>(IShaderBindings bindings, int size) where T : struct
+		{
+			return (IVertexBuffer<T>)Send(getCreateEmptyVertexBuffer, (bindings, size, typeof(T)));
+		}
+
+		public IVertexBuffer<T> CreateVertexBuffer<T>(IShaderBindings bindings, T[] data, bool dynamic = true) where T : struct
+		{
+			return (IVertexBuffer<T>)Send(getCreateVertexBuffer, (bindings, (object)data, dynamic, typeof(T)));
+		}
+
 		public IVertexBuffer<T> CreateEmptyVertexBuffer<T>(int size) where T : struct
 		{
-			return (IVertexBuffer<T>)Send(getCreateEmptyVertexBuffer, (size, typeof(T)));
+			return CreateEmptyVertexBuffer<T>(null, size);
 		}
 
 		public IVertexBuffer<T> CreateVertexBuffer<T>(T[] data, bool dynamic = true) where T : struct
 		{
-			return (IVertexBuffer<T>)Send(getCreateVertexBuffer, ((object)data, dynamic, typeof(T)));
+			return CreateVertexBuffer(null, data, dynamic);
 		}
 
 		public IIndexBuffer CreateIndexBuffer(uint[] indices)
@@ -481,9 +506,9 @@ namespace OpenRA.Platforms.Default
 			Post(doDrawElements, (numIndices, offset));
 		}
 
-		public void EnableDepthBuffer()
+		public void EnableDepthBuffer(bool clear = true)
 		{
-			Post(doEnableDepthBuffer);
+			Post(doEnableDepthBuffer, clear);
 		}
 
 		public void EnableScissor(int left, int top, int width, int height)
@@ -511,7 +536,9 @@ namespace OpenRA.Platforms.Default
 	{
 		readonly ThreadedGraphicsContext device;
 		readonly Func<ITexture> getTexture;
+		readonly Func<ITexture> getSecondaryTexture;
 		readonly Action bind;
+		readonly Action bindNoClear;
 		readonly Action unbind;
 		readonly Action dispose;
 		readonly Action<object> enableScissor;
@@ -521,7 +548,9 @@ namespace OpenRA.Platforms.Default
 		{
 			this.device = device;
 			getTexture = () => frameBuffer.Texture;
+			getSecondaryTexture = () => frameBuffer.SecondaryTexture;
 			bind = frameBuffer.Bind;
+			bindNoClear = frameBuffer.BindNoClear;
 			unbind = frameBuffer.Unbind;
 			dispose = frameBuffer.Dispose;
 
@@ -530,10 +559,16 @@ namespace OpenRA.Platforms.Default
 		}
 
 		public ITexture Texture => device.Send(getTexture);
+		public ITexture SecondaryTexture => device.Send(getSecondaryTexture);
 
 		public void Bind()
 		{
 			device.Post(bind);
+		}
+
+		public void BindNoClear()
+		{
+			device.Post(bindNoClear);
 		}
 
 		public void Unbind()
@@ -760,6 +795,8 @@ namespace OpenRA.Platforms.Default
 
 	sealed class ThreadedShader : IShader
 	{
+		public IShaderBindings Bindings { get; }
+
 		readonly ThreadedGraphicsContext device;
 		readonly Action prepareRender;
 		readonly Action<object> setBool;
@@ -770,11 +807,14 @@ namespace OpenRA.Platforms.Default
 		readonly Action<object> setVec3;
 		readonly Action<object> setVec4;
 		readonly Action bind;
+		readonly Action dispose;
 
 		public ThreadedShader(ThreadedGraphicsContext device, IShader shader)
 		{
 			this.device = device;
+			Bindings = shader.Bindings;
 			bind = shader.Bind;
+			dispose = shader.Dispose;
 			prepareRender = shader.PrepareRender;
 			setBool = tuple => { var t = ((string, bool))tuple; shader.SetBool(t.Item1, t.Item2); };
 			setMatrix = tuple => { var t = ((string, float[]))tuple; shader.SetMatrix(t.Item1, t.Item2); };
@@ -828,6 +868,11 @@ namespace OpenRA.Platforms.Default
 		public void SetVec(string name, float x, float y, float z)
 		{
 			device.Post(setVec4, (name, x, y, z));
+		}
+
+		public void Dispose()
+		{
+			device.Post(dispose);
 		}
 	}
 }

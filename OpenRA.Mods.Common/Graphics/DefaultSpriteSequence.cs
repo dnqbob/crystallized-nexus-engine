@@ -137,6 +137,16 @@ namespace OpenRA.Mods.Common.Graphics
 		[Desc("Don't apply terrain lighting or colored overlays.")]
 		protected static readonly SpriteSequenceField<bool> IgnoreWorldTint = new(nameof(IgnoreWorldTint), false);
 
+		[Desc("Treat this sprite as a bloom source: its non-transparent pixels",
+			"are extracted into the glow buffer and bloom additively.")]
+		protected static readonly SpriteSequenceField<bool> BloomGlow = new(nameof(BloomGlow), false);
+
+		[Desc("Per-sequence bloom strength multiplier. Scales the glow from both the",
+			"`BloomGlow` flag and the `RenderSprites.FullBrightPaletteIndexRanges` overlay",
+			"(multiplied with `RenderSprites.BloomGlowIntensity`), so a single sequence can be",
+			"dimmed even when the actor already glows. 0 disables the glow; 1 is default.")]
+		protected static readonly SpriteSequenceField<float> BloomGlowIntensity = new(nameof(BloomGlowIntensity), 1f);
+
 		[Desc("Adjusts the rendered size of the sprite")]
 		protected static readonly SpriteSequenceField<float> Scale = new(nameof(Scale), 1);
 
@@ -201,6 +211,8 @@ namespace OpenRA.Mods.Common.Graphics
 		protected int zOffset;
 		protected int shadowZOffset;
 		protected bool ignoreWorldTint;
+		protected bool bloomGlow;
+		protected float bloomGlowIntensity;
 		protected float scale;
 		protected ImmutableArray<float> alpha;
 		protected bool alphaFade;
@@ -229,6 +241,8 @@ namespace OpenRA.Mods.Common.Graphics
 		int ISpriteSequence.ZOffset => zOffset;
 		int ISpriteSequence.ShadowZOffset => shadowZOffset;
 		bool ISpriteSequence.IgnoreWorldTint => ignoreWorldTint;
+		bool ISpriteSequence.BloomGlow => bloomGlow;
+		float ISpriteSequence.BloomGlowIntensity => bloomGlowIntensity;
 		float ISpriteSequence.Scale => GetScale();
 		Rectangle ISpriteSequence.Bounds
 		{
@@ -366,6 +380,8 @@ namespace OpenRA.Mods.Common.Graphics
 			shadowZOffset = LoadField(ShadowZOffset, data, defaults).Length;
 
 			ignoreWorldTint = LoadField(IgnoreWorldTint, data, defaults);
+			bloomGlow = LoadField(BloomGlow, data, defaults);
+			bloomGlowIntensity = LoadField(BloomGlowIntensity, data, defaults);
 			scale = LoadField(Scale, data, defaults);
 
 			reverses = LoadField(Reverses, data, defaults);

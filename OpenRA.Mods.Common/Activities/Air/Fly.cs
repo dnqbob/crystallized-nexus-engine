@@ -64,6 +64,9 @@ namespace OpenRA.Mods.Common.Activities
 		{
 			var dat = self.World.Map.DistanceAboveTerrain(aircraft.CenterPosition);
 			var move = moveOverride != WVec.Zero ? moveOverride : (aircraft.Info.CanSlide ? aircraft.FlyStep(desiredFacing) : aircraft.FlyStep(aircraft.Facing));
+			var desiredZ = TerrainHeightAt(self.World.Map, aircraft.CenterPosition) + desiredAltitude.Length;
+			if (moveOverride == WVec.Zero && move.Z == 0 && move.HorizontalLength > 0 && aircraft.Info.TerrainAltitudeSmoothing.Length > 0)
+				desiredZ = SmoothedTerrainHeight(self.World.Map, aircraft.CenterPosition, move, aircraft.Info.TerrainAltitudeSmoothing) + desiredAltitude.Length;
 
 			var oldFacing = aircraft.Facing;
 			aircraft.Facing = Util.TickFacing(aircraft.Facing, desiredFacing, aircraft.GetTurnSpeed(idleTurn));
@@ -82,15 +85,39 @@ namespace OpenRA.Mods.Common.Activities
 
 			// Note: we assume that if move.Z is not zero, it's intentional and we want to move in that vertical direction instead of towards desiredAltitude.
 			// If that is not desired, the place that calls this should make sure moveOverride.Z is zero.
-			if (dat != desiredAltitude || move.Z != 0)
+			if (dat != desiredAltitude || move.Z != 0 || aircraft.CenterPosition.Z != desiredZ)
 			{
 				var maxDelta = move.HorizontalLength * aircraft.Info.MaximumPitch.Tan() / 1024;
-				var moveZ = move.Z != 0 ? move.Z : (desiredAltitude.Length - dat.Length);
+				var moveZ = move.Z != 0 ? move.Z : desiredZ - aircraft.CenterPosition.Z;
 				var deltaZ = moveZ.Clamp(-maxDelta, maxDelta);
 				move = new WVec(move.X, move.Y, deltaZ);
 			}
 
 			aircraft.SetPosition(self, aircraft.CenterPosition + move);
+		}
+
+		static int TerrainHeightAt(Map map, in WPos pos)
+		{
+			return pos.Z - map.DistanceAboveTerrain(pos).Length;
+		}
+
+		static int SmoothedTerrainHeight(Map map, in WPos pos, in WVec move, WDist smoothing)
+		{
+			var range = smoothing.Length;
+			var horizontal = move.HorizontalLength;
+			if (range <= 0 || horizontal == 0)
+				return TerrainHeightAt(map, pos);
+
+			const int Samples = 9;
+			var sum = 0;
+			for (var i = 0; i < Samples; i++)
+			{
+				var offset = -range + 2 * range * i / (Samples - 1);
+				var sample = pos + new WVec(move.X * offset / horizontal, move.Y * offset / horizontal, 0);
+				sum += TerrainHeightAt(map, sample);
+			}
+
+			return sum / Samples;
 		}
 
 		public static void FlyTick(Actor self, Aircraft aircraft, WAngle desiredFacing, WDist desiredAltitude, bool idleTurn = false)

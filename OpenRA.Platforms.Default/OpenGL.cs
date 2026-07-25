@@ -228,6 +228,7 @@ namespace OpenRA.Platforms.Default
 		public const int GL_FRAMEBUFFER = 0x8D40;
 		public const int GL_RENDERBUFFER = 0x8D41;
 		public const int GL_COLOR_ATTACHMENT0 = 0x8CE0;
+		public const int GL_COLOR_ATTACHMENT1 = 0x8CE1;
 		public const int GL_DEPTH_ATTACHMENT = 0x8D00;
 		public const int GL_FRAMEBUFFER_COMPLETE = 0x8CD5;
 		public const int GL_FRAMEBUFFER_BINDING = 0x8CA6;
@@ -291,6 +292,9 @@ namespace OpenRA.Platforms.Default
 
 		public delegate uint CreateProgram();
 		public static CreateProgram glCreateProgram { get; private set; }
+
+		public delegate void DeleteProgram(uint program);
+		public static DeleteProgram glDeleteProgram { get; private set; }
 
 		public delegate void UseProgram(uint program);
 		public static UseProgram glUseProgram { get; private set; }
@@ -368,6 +372,9 @@ namespace OpenRA.Platforms.Default
 		public delegate void BindVertexArray(uint buffer);
 		public static BindVertexArray glBindVertexArray { get; private set; }
 
+		public delegate void DeleteVertexArrays(int n, ref uint buffers);
+		public static DeleteVertexArrays glDeleteVertexArrays { get; private set; }
+
 		public delegate void BufferData(int target, IntPtr size, IntPtr data, int usage);
 		public static BufferData glBufferData { get; private set; }
 
@@ -418,6 +425,12 @@ namespace OpenRA.Platforms.Default
 		public delegate void BlendFunc(int sfactor, int dfactor);
 		public static BlendFunc glBlendFunc { get; private set; }
 
+		public delegate void BlendFuncSeparate(int srcRGB, int dstRGB, int srcAlpha, int dstAlpha);
+		public static BlendFuncSeparate glBlendFuncSeparate { get; private set; }
+
+		public delegate void DepthMask(bool flag);
+		public static DepthMask glDepthMask { get; private set; }
+
 		public delegate void DepthFunc(int func);
 		public static DepthFunc glDepthFunc { get; private set; }
 
@@ -466,6 +479,9 @@ namespace OpenRA.Platforms.Default
 
 		public delegate void BindFramebuffer(int target, uint framebuffer);
 		public static BindFramebuffer glBindFramebuffer { get; private set; }
+
+		public delegate void DrawBuffers(int n, int[] bufs);
+		public static DrawBuffers glDrawBuffers { get; private set; }
 
 		public delegate void FramebufferTexture2D(int target, int attachment,
 			int textarget, uint texture, int level);
@@ -572,6 +588,7 @@ namespace OpenRA.Platforms.Default
 				glClearColor = Bind<ClearColor>("glClearColor");
 				glFinish = Bind<Finish>("glFinish");
 				glCreateProgram = Bind<CreateProgram>("glCreateProgram");
+				glDeleteProgram = Bind<DeleteProgram>("glDeleteProgram");
 				glUseProgram = Bind<UseProgram>("glUseProgram");
 				glGetProgramiv = Bind<GetProgramiv>("glGetProgramiv");
 				glCreateShader = Bind<CreateShader>("glCreateShader");
@@ -608,6 +625,8 @@ namespace OpenRA.Platforms.Default
 				glBlendEquation = Bind<BlendEquation>("glBlendEquation");
 				glBlendEquationSeparate = Bind<BlendEquationSeparate>("glBlendEquationSeparate");
 				glBlendFunc = Bind<BlendFunc>("glBlendFunc");
+				glBlendFuncSeparate = Bind<BlendFuncSeparate>("glBlendFuncSeparate");
+				glDepthMask = Bind<DepthMask>("glDepthMask");
 				glDepthFunc = Bind<DepthFunc>("glDepthFunc");
 				glScissor = Bind<Scissor>("glScissor");
 				glReadPixels = Bind<ReadPixels>("glReadPixels");
@@ -634,8 +653,10 @@ namespace OpenRA.Platforms.Default
 
 				glGenVertexArrays = Bind<GenVertexArrays>("glGenVertexArrays");
 				glBindVertexArray = Bind<BindVertexArray>("glBindVertexArray");
+				glDeleteVertexArrays = Bind<DeleteVertexArrays>("glDeleteVertexArrays");
 				glGenFramebuffers = Bind<GenFramebuffers>("glGenFramebuffers");
 				glBindFramebuffer = Bind<BindFramebuffer>("glBindFramebuffer");
+				glDrawBuffers = Bind<DrawBuffers>("glDrawBuffers");
 				glFramebufferTexture2D = Bind<FramebufferTexture2D>("glFramebufferTexture2D");
 				glDeleteFramebuffers = Bind<DeleteFramebuffers>("glDeleteFramebuffers");
 				glGenRenderbuffers = Bind<GenRenderbuffers>("glGenRenderbuffers");

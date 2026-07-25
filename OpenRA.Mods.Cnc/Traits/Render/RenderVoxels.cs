@@ -29,7 +29,13 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 			ActorPreviewInitializer init, RenderVoxelsInfo rv, string image, Func<WRot> orientation, int facings, PaletteReference p);
 	}
 
-	public class RenderVoxelsInfo : TraitInfo, IRenderActorPreviewInfo, Requires<BodyOrientationInfo>
+	public interface IRenderVoxelShadowModifier
+	{
+		int? ShadowGroundZ(Actor self);
+		WRot? ShadowGroundOrientation(Actor self);
+	}
+
+	public class RenderVoxelsInfo : TraitInfo, IRenderActorPreviewInfo, IRulesetLoaded, Requires<BodyOrientationInfo>
 	{
 		[Desc("Defaults to the actor name.")]
 		public readonly string Image = null;
@@ -55,8 +61,45 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 		public readonly WAngle LightYaw = WAngle.FromDegrees(240);
 		public readonly ImmutableArray<float> LightAmbientColor = [0.6f, 0.6f, 0.6f];
 		public readonly ImmutableArray<float> LightDiffuseColor = [0.4f, 0.4f, 0.4f];
+		[Desc("Palette index ranges rendered as unlit overlay pixels that ignore world tint. Example: 1, 15, 240, 255.")]
+		public readonly int2[] FullBrightPaletteIndexRanges = [];
+
+		[Desc("Bloom multiplier for the full-bright overlay. 0 disables bloom while keeping the overlay visible; 1 is default.")]
+		public readonly float BloomGlowIntensity = 1f;
+
+		public int FullBrightStartIndex { get; private set; } = -1;
+		public int FullBrightEndIndex { get; private set; } = -1;
+		public int FullBrightStartIndex2 { get; private set; } = -1;
+		public int FullBrightEndIndex2 { get; private set; } = -1;
 
 		public override object Create(ActorInitializer init) { return new RenderVoxels(init.Self, this); }
+
+		void IRulesetLoaded<ActorInfo>.RulesetLoaded(Ruleset rules, ActorInfo ai)
+		{
+			if (FullBrightPaletteIndexRanges.Length > 2)
+				throw new YamlException($"{nameof(FullBrightPaletteIndexRanges)} supports at most two palette index ranges.");
+
+			foreach (var range in FullBrightPaletteIndexRanges)
+			{
+				if (range.X < 0 || range.X > 255 || range.Y < 0 || range.Y > 255 || range.Y < range.X)
+					throw new YamlException($"{nameof(FullBrightPaletteIndexRanges)} must use valid ranges between 0 and 255.");
+			}
+
+			if (BloomGlowIntensity < 0f)
+				throw new YamlException($"{nameof(BloomGlowIntensity)} must be greater than or equal to 0.");
+
+			if (FullBrightPaletteIndexRanges.Length > 0)
+			{
+				FullBrightStartIndex = FullBrightPaletteIndexRanges[0].X;
+				FullBrightEndIndex = FullBrightPaletteIndexRanges[0].Y;
+			}
+
+			if (FullBrightPaletteIndexRanges.Length > 1)
+			{
+				FullBrightStartIndex2 = FullBrightPaletteIndexRanges[1].X;
+				FullBrightEndIndex2 = FullBrightPaletteIndexRanges[1].Y;
+			}
+		}
 
 		public virtual IEnumerable<IActorPreview> RenderPreview(ActorPreviewInitializer init)
 		{
@@ -119,6 +162,7 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 		readonly BodyOrientation body;
 		readonly WRot camera;
 		readonly WRot lightSource;
+		IRenderVoxelShadowModifier[] shadowModifiers;
 
 		public RenderVoxels(Actor self, RenderVoxelsInfo info)
 		{
@@ -146,6 +190,9 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 		protected PaletteReference colorPalette, normalsPalette, shadowPalette;
 		IEnumerable<IRenderable> IRender.Render(Actor self, WorldRenderer wr)
 		{
+			if (!components.Any(c => c.IsVisible))
+				return SpriteRenderable.None;
+
 			if (initializePalettes)
 			{
 				var paletteName = Info.Palette ?? Info.PlayerPalette + self.Owner.InternalName;
@@ -160,8 +207,40 @@ namespace OpenRA.Mods.Cnc.Traits.Render
 				new ModelRenderable(
 					Renderer, components, self.CenterPosition, 0, camera, Info.Scale,
 					lightSource, Info.LightAmbientColor, Info.LightDiffuseColor,
-					colorPalette, normalsPalette, shadowPalette)
+					colorPalette, normalsPalette, shadowPalette,
+					1f, float3.Ones, TintModifiers.None, ShadowGroundZ, ShadowGroundOrientation,
+					fullBrightStartIndex: Info.FullBrightStartIndex, fullBrightEndIndex: Info.FullBrightEndIndex,
+					fullBrightStartIndex2: Info.FullBrightStartIndex2, fullBrightEndIndex2: Info.FullBrightEndIndex2,
+					bloomGlowIntensity: Info.BloomGlowIntensity)
 			];
+		}
+
+		int? ShadowGroundZ()
+		{
+			shadowModifiers ??= self.TraitsImplementing<IRenderVoxelShadowModifier>().ToArray();
+
+			foreach (var modifier in shadowModifiers)
+			{
+				var z = modifier.ShadowGroundZ(self);
+				if (z.HasValue)
+					return z;
+			}
+
+			return null;
+		}
+
+		WRot? ShadowGroundOrientation()
+		{
+			shadowModifiers ??= self.TraitsImplementing<IRenderVoxelShadowModifier>().ToArray();
+
+			foreach (var modifier in shadowModifiers)
+			{
+				var orientation = modifier.ShadowGroundOrientation(self);
+				if (orientation.HasValue)
+					return orientation;
+			}
+
+			return null;
 		}
 
 		IEnumerable<Rectangle> IRender.ScreenBounds(Actor self, WorldRenderer wr)

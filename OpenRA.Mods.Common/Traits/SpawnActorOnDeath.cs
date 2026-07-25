@@ -140,7 +140,9 @@ namespace OpenRA.Mods.Common.Traits
 				.Select(ihm => ihm.HuskActor(self))
 				.FirstOrDefault(a => a != null);
 
-			self.World.AddFrameEndTask(w => w.CreateActor(huskActor ?? Info.Actor, td));
+			// Don't spawn the death actor while the world is being disposed: actor removal during World.Dispose
+			// re-queues this frame-end task, and creating an actor then touches the already-disposed world actor.
+			self.World.AddFrameEndTask(w => { if (!w.Disposing) w.CreateActor(huskActor ?? Info.Actor, td); });
 		}
 	}
 }

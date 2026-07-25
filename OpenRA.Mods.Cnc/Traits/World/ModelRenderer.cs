@@ -23,13 +23,15 @@ namespace OpenRA.Mods.Cnc.Traits
 	{
 		public readonly Sprite Sprite;
 		public readonly Sprite ShadowSprite;
+		public readonly Sprite FullBrightSprite;
 		public readonly float ShadowDirection;
 		public readonly float3[] ProjectedShadowBounds;
 
-		public ModelRenderProxy(Sprite sprite, Sprite shadowSprite, float3[] projectedShadowBounds, float shadowDirection)
+		public ModelRenderProxy(Sprite sprite, Sprite shadowSprite, Sprite fullBrightSprite, float3[] projectedShadowBounds, float shadowDirection)
 		{
 			Sprite = sprite;
 			ShadowSprite = shadowSprite;
+			FullBrightSprite = fullBrightSprite;
 			ProjectedShadowBounds = projectedShadowBounds;
 			ShadowDirection = shadowDirection;
 		}
@@ -52,6 +54,7 @@ namespace OpenRA.Mods.Cnc.Traits
 		static readonly float[] ZeroVector = [0, 0, 0, 1];
 		static readonly float[] ZVector = [0, 0, 1, 1];
 		static readonly float[] FlipMtx = Util.ScaleMatrix(1, -1, 1);
+		static readonly float[] ReflectZMtx = Util.ScaleMatrix(1, 1, -1);
 		static readonly float[] ShadowScaleFlipMtx = Util.ScaleMatrix(2, -2, 2);
 		static readonly float[] GroundNormal = [0, 0, 1, 1];
 
@@ -97,7 +100,9 @@ namespace OpenRA.Mods.Cnc.Traits
 		public ModelRenderProxy RenderAsync(
 			WorldRenderer wr, IEnumerable<ModelAnimation> models, in WRot camera, float scale,
 			in WRot groundOrientation, in WRot lightSource, ImmutableArray<float> lightAmbientColor, ImmutableArray<float> lightDiffuseColor,
-			PaletteReference color, PaletteReference normals, PaletteReference shadowPalette)
+			PaletteReference color, PaletteReference normals, PaletteReference shadowPalette, bool reflectZ = false,
+			int fullBrightStartIndex = -1, int fullBrightEndIndex = -1,
+			int fullBrightStartIndex2 = -1, int fullBrightEndIndex2 = -1)
 		{
 			if (!isInFrame)
 				throw new InvalidOperationException("BeginFrame has not been called. You cannot render until a frame has been started.");
@@ -136,6 +141,8 @@ namespace OpenRA.Mods.Cnc.Traits
 				var worldTransform = Util.MakeFloatMatrix(m.RotationFunc().AsMatrix());
 				worldTransform = Util.MatrixMultiply(scaleTransform, worldTransform);
 				worldTransform = Util.MatrixMultiply(offsetTransform, worldTransform);
+				if (reflectZ)
+					worldTransform = Util.MatrixMultiply(ReflectZMtx, worldTransform);
 
 				var bounds = m.Model.Bounds(m.FrameFunc());
 				var worldBounds = Util.MatrixAABBMultiply(worldTransform, bounds);
@@ -184,8 +191,10 @@ namespace OpenRA.Mods.Cnc.Traits
 
 			sheetBuilderForFrame ??= new SheetBuilder(SheetType.BGRA, AllocateSheet);
 
-			var sprite = sheetBuilderForFrame.Allocate(spriteSize, 0, spriteOffset);
-			var shadowSprite = sheetBuilderForFrame.Allocate(shadowSpriteSize, 0, shadowSpriteOffset);
+			var renderFullBright = (fullBrightStartIndex >= 0 && fullBrightEndIndex >= fullBrightStartIndex) ||
+				(fullBrightStartIndex2 >= 0 && fullBrightEndIndex2 >= fullBrightStartIndex2);
+			AllocateRenderSprites(spriteSize, spriteOffset, shadowSpriteSize, shadowSpriteOffset, renderFullBright,
+				out var sprite, out var shadowSprite, out var fullBrightSprite);
 			var sb = sprite.Bounds;
 			var ssb = shadowSprite.Bounds;
 			var spriteCenter = new float2(sb.Left + sb.Width / 2, sb.Top + sb.Height / 2);
@@ -195,6 +204,14 @@ namespace OpenRA.Mods.Cnc.Traits
 			var shadowTranslateMtx = Util.TranslationMatrix(shadowCenter.X - shadowSpriteOffset.X, sheetSize - (shadowCenter.Y - shadowSpriteOffset.Y), 0);
 			var correctionTransform = Util.MatrixMultiply(translateMtx, FlipMtx);
 			var shadowCorrectionTransform = Util.MatrixMultiply(shadowTranslateMtx, ShadowScaleFlipMtx);
+			float[] fullBrightCorrectionTransform = null;
+			if (renderFullBright)
+			{
+				var fbs = fullBrightSprite.Bounds;
+				var fullBrightCenter = new float2(fbs.Left + fbs.Width / 2, fbs.Top + fbs.Height / 2);
+				var fullBrightTranslateMtx = Util.TranslationMatrix(fullBrightCenter.X - spriteOffset.X, sheetSize - (fullBrightCenter.Y - spriteOffset.Y), 0);
+				fullBrightCorrectionTransform = Util.MatrixMultiply(fullBrightTranslateMtx, FlipMtx);
+			}
 
 			void RenderFunc()
 			{
@@ -207,6 +224,8 @@ namespace OpenRA.Mods.Cnc.Traits
 					var rotations = Util.MakeFloatMatrix(m.RotationFunc().AsMatrix());
 					var worldTransform = Util.MatrixMultiply(scaleTransform, rotations);
 					worldTransform = Util.MatrixMultiply(offsetTransform, worldTransform);
+					if (reflectZ)
+						worldTransform = Util.MatrixMultiply(ReflectZMtx, worldTransform);
 
 					var transform = Util.MatrixMultiply(cameraTransform, worldTransform);
 					transform = Util.MatrixMultiply(correctionTransform, transform);
@@ -214,6 +233,7 @@ namespace OpenRA.Mods.Cnc.Traits
 					var shadow = Util.MatrixMultiply(shadowTransform, worldTransform);
 					shadow = Util.MatrixMultiply(shadowCorrectionTransform, shadow);
 
+					var fullBright = renderFullBright ? Util.MatrixMultiply(fullBrightCorrectionTransform, Util.MatrixMultiply(cameraTransform, worldTransform)) : null;
 					var lightTransform = Util.MatrixMultiply(Util.MatrixInverse(rotations), invShadowTransform);
 
 					var frame = m.FrameFunc();
@@ -229,12 +249,19 @@ namespace OpenRA.Mods.Cnc.Traits
 						var lightDirection = ExtractRotationVector(Util.MatrixMultiply(it, lightTransform));
 
 						Render(rd, ModelCache, Util.MatrixMultiply(transform, t), lightDirection,
-							lightAmbientColor, lightDiffuseColor, color.TextureIndex, normals.TextureIndex);
+							lightAmbientColor, lightDiffuseColor, color.TextureIndex, normals.TextureIndex, false,
+							fullBrightStartIndex, fullBrightEndIndex, fullBrightStartIndex2, fullBrightEndIndex2);
 
 						// Disable shadow normals by forcing zero diffuse and identity ambient light
 						if (m.ShowShadow)
 							Render(rd, ModelCache, Util.MatrixMultiply(shadow, t), lightDirection,
-								ShadowAmbient, ShadowDiffuse, shadowPalette.TextureIndex, normals.TextureIndex);
+								ShadowAmbient, ShadowDiffuse, shadowPalette.TextureIndex, normals.TextureIndex, false,
+								fullBrightStartIndex, fullBrightEndIndex, fullBrightStartIndex2, fullBrightEndIndex2);
+
+						if (renderFullBright)
+							Render(rd, ModelCache, Util.MatrixMultiply(fullBright, t), lightDirection,
+								ShadowAmbient, ShadowDiffuse, color.TextureIndex, normals.TextureIndex, true,
+								fullBrightStartIndex, fullBrightEndIndex, fullBrightStartIndex2, fullBrightEndIndex2);
 					}
 				}
 			}
@@ -243,7 +270,26 @@ namespace OpenRA.Mods.Cnc.Traits
 
 			var screenLightVector = Util.MatrixVectorMultiply(invShadowTransform, ZVector);
 			screenLightVector = Util.MatrixVectorMultiply(cameraTransform, screenLightVector);
-			return new ModelRenderProxy(sprite, shadowSprite, screenCorners, -screenLightVector[2] / screenLightVector[1]);
+			return new ModelRenderProxy(sprite, shadowSprite, fullBrightSprite, screenCorners, -screenLightVector[2] / screenLightVector[1]);
+		}
+
+		void AllocateRenderSprites(Size spriteSize, in float3 spriteOffset, Size shadowSpriteSize, in float3 shadowSpriteOffset,
+			bool renderFullBright, out Sprite sprite, out Sprite shadowSprite, out Sprite fullBrightSprite)
+		{
+			sprite = sheetBuilderForFrame.Allocate(spriteSize, 0, spriteOffset);
+			shadowSprite = sheetBuilderForFrame.Allocate(shadowSpriteSize, 0, shadowSpriteOffset);
+			fullBrightSprite = renderFullBright ? sheetBuilderForFrame.Allocate(spriteSize, 0, spriteOffset) : null;
+
+			if (shadowSprite.Sheet == sprite.Sheet && (fullBrightSprite == null || fullBrightSprite.Sheet == sprite.Sheet))
+				return;
+
+			sheetBuilderForFrame.StartNewSheet();
+			sprite = sheetBuilderForFrame.Allocate(spriteSize, 0, spriteOffset);
+			shadowSprite = sheetBuilderForFrame.Allocate(shadowSpriteSize, 0, shadowSpriteOffset);
+			fullBrightSprite = renderFullBright ? sheetBuilderForFrame.Allocate(spriteSize, 0, spriteOffset) : null;
+
+			if (shadowSprite.Sheet != sprite.Sheet || (fullBrightSprite != null && fullBrightSprite.Sheet != sprite.Sheet))
+				throw new SheetOverflowException("Model render sprite, shadow and full-bright overlay must fit on the same sheet.");
 		}
 
 		static void CalculateSpriteGeometry(float2 tl, float2 br, float scale, out Size size, out int2 offset)
@@ -284,10 +330,15 @@ namespace OpenRA.Mods.Cnc.Traits
 			IModelCache cache,
 			float[] t, float[] lightDirection,
 			ImmutableArray<float> ambientLight, ImmutableArray<float> diffuseLight,
-			float colorPaletteTextureIndex, float normalsPaletteTextureIndex)
+			float colorPaletteTextureIndex, float normalsPaletteTextureIndex,
+			bool fullBrightOnly, int fullBrightStartIndex, int fullBrightEndIndex,
+			int fullBrightStartIndex2, int fullBrightEndIndex2)
 		{
 			shader.SetTexture("DiffuseTexture", renderData.Sheet.GetTexture());
 			shader.SetVec("Palettes", colorPaletteTextureIndex, normalsPaletteTextureIndex);
+			shader.SetVec("FullBrightRange", fullBrightStartIndex, fullBrightEndIndex);
+			shader.SetVec("FullBrightRange2", fullBrightStartIndex2, fullBrightEndIndex2);
+			shader.SetVec("FullBrightOnly", fullBrightOnly ? 1 : 0);
 			shader.SetMatrix("TransformMatrix", t);
 			shader.SetVec("LightDirection", lightDirection, 4);
 			shader.SetVec("AmbientLight", ambientLight.AsMemory(), 3);
@@ -387,6 +438,7 @@ namespace OpenRA.Mods.Cnc.Traits
 
 			mappedBuffers.Clear();
 			unmappedBuffers.Clear();
+			shader.Dispose();
 			renderer.WorldRenderers = renderer.WorldRenderers.Where(r => r != this).ToArray();
 		}
 

@@ -35,6 +35,13 @@ namespace OpenRA
 		public bool WindowHasInputFocus => Window.HasInputFocus;
 		public bool WindowIsSuspended => Window.IsSuspended;
 
+		// Set true while the bloom glow extract pass is iterating preparedRenderables
+		// into the glow FBO. Renderables that normally defer their actual draw to a
+		// post-process pass (e.g. AreaBeamDistortionRenderable -> AreaBeamDistortionRenderer)
+		// can branch on this and draw directly into the glow buffer instead, so the
+		// effect still contributes to bloom.
+		public bool IsRenderingGlowExtraction { get; private set; }
+
 		public IReadOnlyDictionary<string, SpriteFont> Fonts;
 
 		internal IPlatformWindow Window { get; }
@@ -56,6 +63,14 @@ namespace OpenRA
 		Sprite worldSprite;
 		Size lastMaximumViewportSize;
 		Size lastWorldViewportSize;
+
+		// Bloom-glow pipeline: render full-bright palette pixels into a
+		// separate FBO, blur via ping-pong, then additively composite onto
+		// the world buffer. Same size as worldBuffer so the combined shader's
+		// projection params are reused unchanged.
+		IFrameBuffer glowBuffer;
+		IFrameBuffer glowPingBuffer;
+		readonly BloomGlowRenderer bloomGlowRenderer;
 
 		public Size WorldFrameBufferSize => worldSheet.Size;
 		public int WorldDownscaleFactor { get; private set; } = 1;
@@ -106,9 +121,10 @@ namespace OpenRA
 			RgbaSpriteRenderer = new RgbaSpriteRenderer(SpriteRenderer);
 			RgbaColorRenderer = new RgbaColorRenderer(SpriteRenderer);
 
-			tempVertexBuffer = Context.CreateEmptyVertexBuffer<Vertex>(TempVertexBufferSize);
+			tempVertexBuffer = Context.CreateEmptyVertexBuffer<Vertex>(combinedBindings, TempVertexBufferSize);
 			quadIndexBuffer = Context.CreateIndexBuffer(Util.CreateQuadIndices(TempIndexBufferSize / 6));
 			bufferSnapshot = Context.CreateTexture();
+			bloomGlowRenderer = new BloomGlowRenderer(this);
 		}
 
 		static Size GetResolution(GraphicSettings graphicsSettings)
@@ -216,9 +232,19 @@ namespace OpenRA
 			if (worldSprite == null || worldSheet.Size != worldBufferSize)
 			{
 				worldBuffer?.Dispose();
+				glowBuffer?.Dispose();
+				glowPingBuffer?.Dispose();
 
 				// If enableWorldFrameBufferDownscale and the world is more than twice the size of the final output size do we allow it to be downsampled!
 				worldBuffer = Context.CreateFrameBuffer(worldBufferSize);
+
+				// Bloom-glow ping-pong buffers - same size and same projection,
+				// populated by a second pass of the world geometry with
+				// GlowExtractOnly active.
+				glowBuffer = Context.CreateFrameBuffer(worldBufferSize);
+				glowPingBuffer = Context.CreateFrameBuffer(worldBufferSize);
+				glowBuffer.Texture.ScaleFilter = TextureScaleFilter.Linear;
+				glowPingBuffer.Texture.ScaleFilter = TextureScaleFilter.Linear;
 
 				// Pixel art scaling mode is a customized bilinear sampling
 				worldBuffer.Texture.ScaleFilter = TextureScaleFilter.Linear;
@@ -279,6 +305,8 @@ namespace OpenRA
 				lastWorldViewport = rect;
 			}
 
+			WorldSpriteRenderer.SetCloudShadowParams();
+			WorldSpriteRenderer.SetWorldTintParams();
 			renderType = RenderType.World;
 		}
 
@@ -357,6 +385,64 @@ namespace OpenRA
 			renderType = RenderType.None;
 		}
 
+		// Bloom on full-bright palette pixels. Called AFTER the main actor pass so
+		// the world buffer is fully populated; the composite additively layers
+		// the blurred glow halo on top. Geometry is re-rendered with
+		// GlowExtractOnly active - sprites without full-bright ranges produce
+		// zero fragments (early discard), so the re-pass is mostly vertex work.
+		public void RenderGlowBloom(WorldRenderer wr, IReadOnlyList<IFinalizedRenderable> preparedRenderables, float strength)
+		{
+			if (renderType != RenderType.World)
+				throw new InvalidOperationException($"RenderGlowBloom called with renderType = {renderType}, expected RenderType.World.");
+
+			Flush();
+
+			worldBuffer.DisableScissor();
+			worldBuffer.Unbind();
+
+			WorldSpriteRenderer.SetGlowExtractParams(true);
+			glowBuffer.Bind();
+			IsRenderingGlowExtraction = true;
+			try
+			{
+				// Full Render(): the glow extract needs to see the body and
+				// FullBright sprites where the bloom pixels live. The combined
+				// shader's GlowExtractOnly path discards everything except glow
+				// pixels, so this is cheap for sprites that have nothing to bloom.
+				for (var i = 0; i < preparedRenderables.Count; i++)
+					preparedRenderables[i].Render(wr);
+				Flush();
+			}
+			finally
+			{
+				IsRenderingGlowExtraction = false;
+				glowBuffer.Unbind();
+				WorldSpriteRenderer.SetGlowExtractParams(false);
+			}
+
+			// Horizontal then vertical Gaussian; the vertical pass writes back
+			// into glowBuffer which we then sample during composite.
+			bloomGlowRenderer.Blur(wr, glowBuffer.Texture, glowPingBuffer, horizontal: true);
+			bloomGlowRenderer.Blur(wr, glowPingBuffer.Texture, glowBuffer, horizontal: false);
+
+			// Rebind worldBuffer WITHOUT clearing - the existing content is the
+			// destination of the additive composite.
+			worldBuffer.BindNoClear();
+			if (scissorState.Count > 0)
+			{
+				var rect = scissorState.Peek();
+				var r = Rectangle.FromLTRB(
+					rect.Left / WorldDownscaleFactor,
+					rect.Top / WorldDownscaleFactor,
+					(rect.Right + WorldDownscaleFactor - 1) / WorldDownscaleFactor,
+					(rect.Bottom + WorldDownscaleFactor - 1) / WorldDownscaleFactor);
+				worldBuffer.EnableScissor(r);
+			}
+
+			bloomGlowRenderer.Composite(wr, glowBuffer, strength);
+			Flush();
+		}
+
 		public void DrawBatch<T>(IVertexBuffer<T> vertices, IShader shader,
 			int firstVertex, int numVertices, PrimitiveType type)
 			where T : struct
@@ -390,6 +476,7 @@ namespace OpenRA
 
 		public Size Resolution => Window.EffectiveWindowSize;
 		public Size NativeResolution => Window.NativeWindowSize;
+		public Size SurfaceSize => Window.SurfaceSize;
 		public float WindowScale => Window.EffectiveWindowScale;
 		public float NativeWindowScale => Window.NativeWindowScale;
 		public GLProfile GLProfile => Window.GLProfile;
@@ -418,6 +505,11 @@ namespace OpenRA
 		public IShader CreateShader(IShaderBindings bindings)
 		{
 			return Context.CreateShader(bindings);
+		}
+
+		public IVertexBuffer<T> CreateVertexBuffer<T>(IShaderBindings bindings, T[] data, bool dynamic) where T : struct
+		{
+			return Context.CreateVertexBuffer(bindings, data, dynamic);
 		}
 
 		public IVertexBuffer<T> CreateVertexBuffer<T>(T[] data, bool dynamic) where T : struct
@@ -482,10 +574,10 @@ namespace OpenRA
 			}
 		}
 
-		public void EnableDepthBuffer()
+		public void EnableDepthBuffer(bool clear = true)
 		{
 			Flush();
-			Context.EnableDepthBuffer();
+			Context.EnableDepthBuffer(clear);
 		}
 
 		public void DisableDepthBuffer()
@@ -549,12 +641,17 @@ namespace OpenRA
 
 		public void Dispose()
 		{
+			bloomGlowRenderer?.Dispose();
+			glowBuffer?.Dispose();
+			glowPingBuffer?.Dispose();
 			worldBuffer?.Dispose();
 			screenBuffer.Dispose();
 			bufferSnapshot.Dispose();
 			tempVertexBuffer.Dispose();
 			quadIndexBuffer.Dispose();
 			fontSheetBuilder?.Dispose();
+			WorldSpriteRenderer.Shader.Dispose();
+			SpriteRenderer.Shader.Dispose();
 			if (Fonts != null)
 				foreach (var font in Fonts.Values)
 					font.Dispose();

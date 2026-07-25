@@ -19,7 +19,7 @@ using OpenRA.Traits;
 namespace OpenRA.Mods.Common.Traits.Render
 {
 	[Desc("This actor has a death animation.")]
-	public class WithDeathAnimationInfo : ConditionalTraitInfo, Requires<RenderSpritesInfo>
+	public class WithDeathAnimationInfo : ConditionalTraitInfo, Requires<RenderSpritesInfo>, IRulesetLoaded<ActorInfo>
 	{
 		[SequenceReference(prefix: true)]
 		[Desc("Sequence prefix to play when this actor is killed by a warhead.")]
@@ -57,7 +57,35 @@ namespace OpenRA.Mods.Common.Traits.Render
 		[Desc("Delay the spawn of the death animation by this many ticks.")]
 		public readonly int Delay = 0;
 
+		[Desc("Palette index ranges to render as an un-tinted bloom overlay for this death animation. Example: 160, 160, 192, 192.")]
+		public readonly int2[] FullBrightPaletteIndexRanges = [];
+
+		public uint[] FullBrightPaletteRangeMasks { get; private set; } = [];
+
 		public override object Create(ActorInitializer init) { return new WithDeathAnimation(init.Self, this); }
+
+		void IRulesetLoaded<ActorInfo>.RulesetLoaded(Ruleset rules, ActorInfo ai)
+		{
+			foreach (var range in FullBrightPaletteIndexRanges)
+			{
+				if (range.X < 0 || range.X > 255 || range.Y < 0 || range.Y > 255 || range.Y < range.X)
+					throw new YamlException($"{nameof(FullBrightPaletteIndexRanges)} must use valid ranges between 0 and 255.");
+			}
+
+			FullBrightPaletteRangeMasks = PackFullBrightPaletteRanges(FullBrightPaletteIndexRanges);
+		}
+
+		static uint[] PackFullBrightPaletteRanges(int2[] ranges)
+		{
+			if (ranges.Length == 0)
+				return [];
+
+			var masks = new uint[(ranges.Length + 1) / 2];
+			for (var i = 0; i < ranges.Length; i++)
+				masks[i / 2] |= (uint)(ranges[i].X | ranges[i].Y << 8) << (16 * (i % 2));
+
+			return masks;
+		}
 	}
 
 	public class WithDeathAnimation : ConditionalTrait<WithDeathAnimationInfo>, INotifyKilled, INotifyCrushed
@@ -105,7 +133,8 @@ namespace OpenRA.Mods.Common.Traits.Render
 
 		public void SpawnDeathAnimation(Actor self, WPos pos, string image, string sequence, string palette, int delay)
 		{
-			self.World.AddFrameEndTask(w => w.Add(new SpriteEffect(pos, w, image, sequence, palette, delay: delay)));
+			self.World.AddFrameEndTask(w => w.Add(new SpriteEffect(pos, w, image, sequence, palette,
+				delay: delay, fullBrightPaletteRangeMasks: Info.FullBrightPaletteRangeMasks)));
 		}
 
 		void INotifyCrushed.OnCrush(Actor self, Actor crusher, BitSet<CrushClass> crushClasses)

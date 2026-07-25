@@ -20,9 +20,16 @@ namespace OpenRA.Graphics
 		int ZOffset { get; }
 		bool IsDecoration { get; }
 
+		// Marks the renderable as the actor's drop shadow. Default false.
+		bool IsShadow => false;
+
 		IRenderable WithZOffset(int newOffset);
 		IRenderable OffsetBy(in WVec offset);
 		IRenderable AsDecoration();
+
+		// Marks the renderable as a drop shadow.
+		// Default: no-op (most renderables cannot be shadows).
+		IRenderable AsShadow() => this;
 
 		IFinalizedRenderable PrepareRender(WorldRenderer wr);
 	}
@@ -38,7 +45,14 @@ namespace OpenRA.Graphics
 	{
 		None = 0,
 		IgnoreWorldTint = 1,
-		ReplaceColor = 2
+		ReplaceColor = 2,
+
+		// Marks the sprite as a bloom source: the combined shader's glow
+		// extract pass treats its non-transparent pixels as glow, even when
+		// the sprite is RGBA (no palette index to test). Opt-in via the
+		// "BloomGlow: True" sequence field; hardcoded true by the voxel
+		// renderer for its dedicated FullBrightSprite.
+		BloomGlow = 4
 	}
 
 	public interface IModifyableRenderable : IRenderable
@@ -53,6 +67,8 @@ namespace OpenRA.Graphics
 
 	public interface IFinalizedRenderable
 	{
+		// Mirrors IRenderable.IsShadow after PrepareRender.
+		bool IsShadow => false;
 		void Render(WorldRenderer wr);
 		void RenderDebugGeometry(WorldRenderer wr);
 		Rectangle ScreenBounds(WorldRenderer wr);

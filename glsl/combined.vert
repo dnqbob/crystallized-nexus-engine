@@ -7,7 +7,9 @@ uniform float PaletteRows;
 in vec3 aVertexPosition;
 in vec4 aVertexTexCoord;
 in uint aVertexAttributes;
+in uint aVertexFullBrightRanges;
 in vec4 aVertexTint;
+in float aVertexBloomIntensity;
 
 out vec4 vTexCoord;
 flat out float vTexPalette;
@@ -17,7 +19,13 @@ flat out uint vChannelType;
 flat out vec4 vDepthMask;
 flat out uint vDepthSampler;
 out vec4 vTint;
-	
+flat out float vIgnoreWorldTint;
+flat out float vFullBrightOnly;
+flat out float vBloomGlow;
+flat out float vBloomIntensity;
+flat out uint vFullBrightRanges;
+out vec2 vWorldPos;
+
 vec4 SelectChannelMask(uint x)
 {
 	switch (x)
@@ -52,13 +60,25 @@ void main()
 	//    001, 011, 101, 111: Sample depth sprite from channel R,G,B,A
 	// Bits 6-8 define the sampler index (0-7) that the primary texture is bound to
 	// Bits 9-11 define the sampler index (0-7) that the secondary texture is bound to
-	// Bits 16-31 define the palette row for paletted sprites
+	// Bit 12 disables world-tint-class effects.
+	// Bit 13 renders only palette indices from aVertexFullBrightRanges.
+	// Bit 14 marks the geometry as a BloomGlow source.
+	// Bits 16-31 define the palette row for paletted sprites.
 	vChannelType = aVertexAttributes & 0x07u;
 	vChannelMask = SelectChannelMask(vChannelType);
 	vDepthMask = SelectChannelMask((aVertexAttributes >> 3) & 0x07u);
 	vChannelSampler = (aVertexAttributes >> 6) & 0x07u;
 	vDepthSampler = (aVertexAttributes >> 9) & 0x07u;
 	vTexPalette = float(aVertexAttributes >> 16) / PaletteRows;
+
+	// Bit 12: geometry that ignores world tint (e.g. additive FX, godrays).
+	// The combined fragment shader skips world-tint-class effects for it.
+	vIgnoreWorldTint = float((aVertexAttributes >> 12) & 0x1u);
+	vFullBrightOnly = float((aVertexAttributes >> 13) & 0x1u);
+	vBloomGlow = float((aVertexAttributes >> 14) & 0x1u);
+	vBloomIntensity = aVertexBloomIntensity;
+	vFullBrightRanges = aVertexFullBrightRanges;
+	vWorldPos = aVertexPosition.xy;
 
 	vTint = aVertexTint;
 }

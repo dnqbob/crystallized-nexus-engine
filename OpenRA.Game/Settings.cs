@@ -16,6 +16,7 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using OpenRA.Primitives;
 
 namespace OpenRA
@@ -232,6 +233,8 @@ namespace OpenRA
 		public bool SyncCheckBotModuleCode = false;
 	}
 
+	public enum GradingMode { Off, Cinematic, ToxHaze }
+
 	[YamlNode("Graphics", shared: true)]
 	public class GraphicSettings : SettingsModule
 	{
@@ -266,6 +269,27 @@ namespace OpenRA
 		[Desc("Disable operating-system provided cursor rendering.")]
 		public bool DisableHardwareCursors = false;
 
+		[Desc("Enable water reflection and overlay post-process effects.")]
+		public bool WaterEffects = true;
+
+		[Desc("Full-screen atmospheric color grading mode: Off, Cinematic or ToxHaze.")]
+		public GradingMode PostProcessGrading = GradingMode.Cinematic;
+
+		[Desc("Enable Tiberium glow, heat-shimmer and ground light-bleed post-process effects.")]
+		public bool TiberiumEffects = true;
+
+		[Desc("Enable procedural cloud shadow post-process effect.")]
+		public bool CloudShadows = true;
+
+		[Desc("Enable bloom on glowing palette-index pixels (additive halo on full-bright ranges, gated by a world trait).")]
+		public bool BloomGlowEffects = true;
+
+		[Desc("Enable VoxelDynamics tilt and recoil animations on units.")]
+		public bool VoxelDynamics = true;
+
+		[Desc("Enable screen shake from explosions and other effects.")]
+		public bool ScreenShake = true;
+
 		[Desc("Display index to use in a multi-monitor fullscreen setup.")]
 		public int VideoDisplay = 0;
 
@@ -286,6 +310,7 @@ namespace OpenRA
 	public class SoundSettings : SettingsModule
 	{
 		public float SoundVolume = 0.5f;
+		public float SpeechVolume = 0.5f;
 		public float MusicVolume = 0.5f;
 		public float VideoVolume = 0.5f;
 
@@ -380,6 +405,9 @@ namespace OpenRA
 
 	public class Settings
 	{
+		const int SaveMaxRetryCount = 10;
+		const int SaveRetryDelay = 50;
+
 		readonly string settingsFile;
 
 		public readonly PlayerSettings Player;
@@ -493,7 +521,26 @@ namespace OpenRA
 				return container;
 			}
 
-			yaml.Where(n => n.Value.Nodes.Count > 0).SelectMany(AddSpacer).WriteToFile(settingsFile);
+			try
+			{
+				for (var i = 0; ; i++)
+				{
+					try
+					{
+						yaml.Where(n => n.Value.Nodes.Count > 0).SelectMany(AddSpacer).WriteToFile(settingsFile);
+						return;
+					}
+					catch (IOException) when (i < SaveMaxRetryCount)
+					{
+						Thread.Sleep(SaveRetryDelay);
+					}
+				}
+			}
+			catch (IOException e)
+			{
+				Log.Write("debug", $"Failed to save settings to `{settingsFile}`.");
+				Log.Write("debug", e);
+			}
 		}
 
 		static string SanitizedName(string dirty)

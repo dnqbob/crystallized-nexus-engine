@@ -310,14 +310,14 @@ namespace OpenRA.Platforms.Default
 				AL10.alSourcePlay(source);
 		}
 
-		public void SetSoundVolume(float volume, ISound music, ISound video)
+		public void SetSoundVolume(float volume, IEnumerable<ISound> excluded)
 		{
+			var excludedSources = new HashSet<uint>(excluded?.Select(s => ((OpenAlSound)s).Source) ?? Enumerable.Empty<uint>());
 			var sounds = sourcePool.Keys.Where(key =>
 			{
 				AL10.alGetSourcei(key, AL10.AL_SOURCE_STATE, out var state);
 				return (state == AL10.AL_PLAYING || state == AL10.AL_PAUSED) &&
-					   (music == null || key != ((OpenAlSound)music).Source) &&
-					   (video == null || key != ((OpenAlSound)video).Source);
+					   !excludedSources.Contains(key);
 			});
 
 			foreach (var s in sounds)

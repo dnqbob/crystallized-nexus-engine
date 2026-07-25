@@ -161,6 +161,15 @@ namespace OpenRA.Graphics
 			return rect;
 		}
 
+		public void StartNewSheet()
+		{
+			Current = allocateSheet();
+			sheets.Add(Current);
+			CurrentChannel = Type == SheetType.Indexed ? TextureChannel.Red : TextureChannel.RGBA;
+			rowHeight = 0;
+			p = int2.Zero;
+		}
+
 		public void Dispose()
 		{
 			foreach (var sheet in sheets)

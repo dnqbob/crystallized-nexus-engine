@@ -19,12 +19,15 @@ namespace OpenRA.Platforms.Default
 {
 	sealed class Shader : ThreadAffine, IShader
 	{
+		public IShaderBindings Bindings => bindings;
+
 		readonly Dictionary<string, int> samplers = [];
 		readonly Dictionary<string, int> uniformCache = [];
 		readonly Dictionary<int, ITexture> textures = [];
 		readonly Queue<int> unbindTextures = [];
 		readonly IShaderBindings bindings;
 		readonly uint program;
+		bool disposed;
 
 		static uint CompileShaderObject(int type, string code, string name)
 		{
@@ -255,6 +258,16 @@ namespace OpenRA.Platforms.Default
 					OpenGL.glUniformMatrix4fv(uniformCache[name], 1, false, new IntPtr(pMtx));
 			}
 
+			OpenGL.CheckGLError();
+		}
+
+		public void Dispose()
+		{
+			if (disposed)
+				return;
+
+			disposed = true;
+			OpenGL.glDeleteProgram(program);
 			OpenGL.CheckGLError();
 		}
 	}

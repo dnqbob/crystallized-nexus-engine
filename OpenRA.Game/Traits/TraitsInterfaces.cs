@@ -256,6 +256,7 @@ namespace OpenRA.Traits
 
 		WDist LargestActorRadius { get; }
 		WDist LargestBlockingActorRadius { get; }
+		WDist LargestDetectionRange { get; }
 
 		void UpdateOccupiedCells(IOccupySpace ios);
 		event Action<CPos> CellUpdated;
@@ -290,6 +291,9 @@ namespace OpenRA.Traits
 
 	[RequireExplicitImplementation]
 	public interface ISelectionBar { float GetValue(); Color GetColor(); bool DisplayWhenEmpty { get; } }
+
+	/// <summary>Marker interface: render this ISelectionBar above the health bar instead of below.</summary>
+	public interface ISelectionBarAboveHealth { }
 
 	public interface ISelectionDecorations
 	{
@@ -404,6 +408,9 @@ namespace OpenRA.Traits
 		int AssignSpawnPoint(object state, Session lobbyInfo, Session.Client client, MersenneTwister playerRandom);
 	}
 
+	/// <summary>Allows traits on the Player actor to override the resolved display name for bot players.</summary>
+	public interface IResolvePlayerName { string ResolvePlayerName(Player player); }
+
 	public interface IBotInfo : ITraitInfoInterface
 	{
 		string Type { get; }
@@ -464,7 +471,7 @@ namespace OpenRA.Traits
 		bool SpatiallyPartitionable { get; }
 	}
 
-	public enum PostProcessPassType { AfterShroud, AfterWorld, AfterActors, AfterAnnotations }
+	public enum PostProcessPassType { AfterTerrain, AfterShroud, AfterWorld, AfterActors, AfterAnnotations }
 
 	[RequireExplicitImplementation]
 	public interface IRenderPostProcessPass
@@ -582,9 +589,10 @@ namespace OpenRA.Traits
 		public readonly bool IsLocked;
 		public readonly bool IsVisible;
 		public readonly int DisplayOrder;
+		public readonly string Category;
 
 		public LobbyOption(MapPreview map, string id, string name, string description, bool visible, int displayorder,
-			IReadOnlyDictionary<string, string> values, string defaultValue, bool locked)
+			IReadOnlyDictionary<string, string> values, string defaultValue, bool locked, string category = null)
 		{
 			Id = id;
 			Name = map.GetMessage(name);
@@ -594,6 +602,7 @@ namespace OpenRA.Traits
 			Values = values.ToDictionary(v => v.Key, v => map.GetMessage(v.Value));
 			DefaultValue = defaultValue;
 			IsLocked = locked;
+			Category = category;
 		}
 
 		public virtual string Label(string value)
@@ -610,8 +619,9 @@ namespace OpenRA.Traits
 			{ false.ToString(), "Disabled" }
 		};
 
-		public LobbyBooleanOption(MapPreview map, string id, string name, string description, bool visible, int displayorder, bool defaultValue, bool locked)
-			: base(map, id, name, description, visible, displayorder, new ReadOnlyDictionary<string, string>(BoolValues), defaultValue.ToString(), locked) { }
+		public LobbyBooleanOption(MapPreview map, string id, string name, string description, bool visible,
+			int displayorder, bool defaultValue, bool locked, string category = null)
+			: base(map, id, name, description, visible, displayorder, new ReadOnlyDictionary<string, string>(BoolValues), defaultValue.ToString(), locked, category) { }
 
 		public override string Label(string newValue)
 		{

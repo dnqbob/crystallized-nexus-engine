@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
+using System.Linq;
 using OpenRA.FileSystem;
 using OpenRA.GameRules;
 using OpenRA.Primitives;
@@ -46,6 +47,8 @@ namespace OpenRA
 		ISound video;
 		readonly Dictionary<uint, ISound> currentSounds = [];
 		readonly Dictionary<string, ISound> currentNotifications = [];
+		readonly List<ISound> currentSpeechSounds = [];
+		readonly HashSet<ISound> volumeSliderExemptSounds = [];
 		public bool DummyEngine { get; }
 
 		public Sound(IPlatform platform, SoundSettings soundSettings)
@@ -98,6 +101,7 @@ namespace OpenRA
 			sounds = new Cache<string, ISoundSource>(filename => LoadSound(filename, LoadIntoMemory));
 			currentSounds.Clear();
 			currentNotifications.Clear();
+			currentSpeechSounds.Clear();
 			video = null;
 		}
 
@@ -303,6 +307,31 @@ namespace OpenRA
 			soundEngine.PauseSound(music, true);
 		}
 
+		// Long-running managed sounds (e.g. a mod's dynamic music layers) that continuously drive their
+		// own volume and should not be swept to a flat gain whenever the sound/master volume changes.
+		public void ExemptFromVolumeSlider(ISound sound)
+		{
+			if (sound != null)
+				volumeSliderExemptSounds.Add(sound);
+		}
+
+		public void UnexemptFromVolumeSlider(ISound sound)
+		{
+			volumeSliderExemptSounds.Remove(sound);
+		}
+
+		IEnumerable<ISound> SoundsExcludedFromVolumeSlider()
+		{
+			if (music != null)
+				yield return music;
+
+			if (video != null)
+				yield return video;
+
+			foreach (var sound in volumeSliderExemptSounds)
+				yield return sound;
+		}
+
 		float soundVolumeModifier = 1.0f;
 		public float SoundVolumeModifier
 		{
@@ -311,11 +340,24 @@ namespace OpenRA
 			set
 			{
 				soundVolumeModifier = value;
-				soundEngine.SetSoundVolume(InternalSoundVolume, music, video);
+				soundEngine.SetSoundVolume(InternalSoundVolume, SoundsExcludedFromVolumeSlider());
 			}
 		}
 
 		float InternalSoundVolume => SoundVolume * soundVolumeModifier;
+
+		public float SpeechVolume
+		{
+			get => Game.Settings.Sound.SpeechVolume;
+
+			set
+			{
+				Game.Settings.Sound.SpeechVolume = value;
+				currentSpeechSounds.RemoveAll(s => s.Complete);
+				foreach (var sound in currentSpeechSounds.Where(s => !s.Complete))
+					sound.Volume = value;
+			}
+		}
 
 		public float SoundVolume
 		{
@@ -324,7 +366,7 @@ namespace OpenRA
 			set
 			{
 				Game.Settings.Sound.SoundVolume = value;
-				soundEngine.SetSoundVolume(InternalSoundVolume, music, video);
+				soundEngine.SetSoundVolume(InternalSoundVolume, SoundsExcludedFromVolumeSlider());
 			}
 		}
 
@@ -407,12 +449,14 @@ namespace OpenRA
 
 			var name = prefix + clip + suffix;
 			var actorId = voicedActor != null && voicedActor.World.Selection.Contains(voicedActor) ? 0 : id;
+			var isSpeechSound = voicedActor != null || type.Equals("Speech", StringComparison.InvariantCultureIgnoreCase);
 
 			if (!string.IsNullOrEmpty(name) && (player == null || player == player.World.LocalPlayer))
 			{
 				ISound PlaySound()
 				{
-					var volume = InternalSoundVolume * volumeModifier * pool.VolumeModifier;
+					var baseVolume = isSpeechSound ? SpeechVolume : InternalSoundVolume;
+					var volume = baseVolume * volumeModifier * pool.VolumeModifier;
 					return soundEngine.Play2D(sounds[name], false, relative, pos, volume, attenuateVolume);
 				}
 
@@ -436,6 +480,8 @@ namespace OpenRA
 						return false;
 					else
 						currentNotifications[name] = sound;
+					if (isSpeechSound)
+						currentSpeechSounds.Add(sound);
 				}
 				else
 				{
@@ -452,6 +498,8 @@ namespace OpenRA
 						return false;
 					else
 						currentSounds[actorId] = sound;
+					if (isSpeechSound)
+						currentSpeechSounds.Add(sound);
 				}
 			}
 

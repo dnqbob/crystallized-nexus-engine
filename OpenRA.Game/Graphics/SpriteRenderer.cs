@@ -23,6 +23,7 @@ namespace OpenRA.Graphics
 		static readonly int UintSize = Marshal.SizeOf<uint>();
 
 		readonly Renderer renderer;
+		public IShader Shader => shader;
 		readonly IShader shader;
 
 		Vertex[] vertices;
@@ -151,24 +152,56 @@ namespace OpenRA.Graphics
 		}
 
 		internal void DrawSprite(Sprite s, int paletteTextureIndex, in float3 location, float scale, in float3 tint, float alpha,
-			float rotation = 0f)
+			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0, bool isBloomSource = false,
+			float bloomIntensity = 1f)
 		{
+			if (isBloomSource || fullBrightPaletteRanges != 0)
+				SubmittedGlowSource = true;
+
 			var samplers = SetRenderStateForSprite(s);
 			Util.FastCreateQuad(vertices, location + scale * s.Offset, s, samplers, paletteTextureIndex, vertexCount, scale * s.Size, tint, alpha,
-								rotation);
+								rotation, ignoreWorldTint, fullBrightPaletteRanges, isBloomSource, bloomIntensity);
 			vertexCount += 4;
 		}
 
 		public void DrawSprite(Sprite s, PaletteReference pal, in float3 location, float scale, in float3 tint, float alpha,
-			float rotation = 0f)
+			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0, bool isBloomSource = false,
+			float bloomIntensity = 1f)
 		{
-			DrawSprite(s, ResolveTextureIndex(s, pal), location, scale, tint, alpha, rotation);
+			DrawSprite(s, ResolveTextureIndex(s, pal), location, scale, tint, alpha, rotation, ignoreWorldTint, fullBrightPaletteRanges, isBloomSource,
+				bloomIntensity);
 		}
 
-		internal void DrawSprite(Sprite s, int paletteTextureIndex, in float3 a, in float3 b, in float3 c, in float3 d, in float3 tint, float alpha)
+		internal void DrawSprite(Sprite s, int paletteTextureIndex, in float3 location, in float3 scale, in float3 tint, float alpha,
+			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0, bool isBloomSource = false,
+			float bloomIntensity = 1f)
 		{
+			if (isBloomSource || fullBrightPaletteRanges != 0)
+				SubmittedGlowSource = true;
+
 			var samplers = SetRenderStateForSprite(s);
-			Util.FastCreateQuad(vertices, a, b, c, d, s, samplers, paletteTextureIndex, tint, alpha, vertexCount);
+			Util.FastCreateQuad(vertices, location + scale * s.Offset, s, samplers, paletteTextureIndex, vertexCount, scale * s.Size, tint, alpha,
+								rotation, ignoreWorldTint, fullBrightPaletteRanges, isBloomSource, bloomIntensity);
+			vertexCount += 4;
+		}
+
+		public void DrawSprite(Sprite s, PaletteReference pal, in float3 location, in float3 scale, in float3 tint, float alpha,
+			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0, bool isBloomSource = false,
+			float bloomIntensity = 1f)
+		{
+			DrawSprite(s, ResolveTextureIndex(s, pal), location, scale, tint, alpha, rotation, ignoreWorldTint, fullBrightPaletteRanges, isBloomSource,
+				bloomIntensity);
+		}
+
+		internal void DrawSprite(Sprite s, int paletteTextureIndex, in float3 a, in float3 b, in float3 c, in float3 d, in float3 tint, float alpha,
+			bool isBloomSource = false, float bloomIntensity = 1f)
+		{
+			if (isBloomSource)
+				SubmittedGlowSource = true;
+
+			var samplers = SetRenderStateForSprite(s);
+			Util.FastCreateQuad(vertices, a, b, c, d, s, samplers, paletteTextureIndex, tint, alpha, vertexCount,
+				isBloomSource: isBloomSource, bloomIntensity: bloomIntensity);
 			vertexCount += 4;
 		}
 
@@ -247,11 +280,49 @@ namespace OpenRA.Graphics
 			shader.SetVec("p2", -1, -1, depthMargin != 0f ? 1 : 0);
 		}
 
+		// Drifting cloud-shadow uniforms. Must be pushed EVERY world frame (the
+		// time advances per tick) - SetViewportParams is only called on viewport
+		// change, so this is invoked separately from Renderer.BeginWorld.
+		public void SetCloudShadowParams()
+		{
+			shader.SetVec("CloudShadowAlpha", CloudShadowState.Alpha);
+			shader.SetVec("CloudShadowScale", CloudShadowState.Scale);
+			shader.SetVec("CloudShadowWind", CloudShadowState.WindX, CloudShadowState.WindY);
+			shader.SetVec("CloudShadowTime", CloudShadowState.Time);
+			shader.SetVec("CloudShadowCoverage", CloudShadowState.Coverage);
+			shader.SetVec("CloudShadowEdge", CloudShadowState.Edge);
+		}
+
+		// Day/night world tint. Pushed every world frame (advances per tick),
+		// alongside the cloud-shadow params. Identity (1,1,1) = no-op.
+		public void SetWorldTintParams()
+		{
+			shader.SetVec("WorldDayTintEnabled", 1f);
+			shader.SetVec("WorldDayTint", WorldTintState.Red, WorldTintState.Green, WorldTintState.Blue);
+		}
+
 		public void SetDepthPreview(bool enabled, float contrast, float offset)
 		{
 			shader.SetBool("EnableDepthPreview", enabled);
 			shader.SetVec("DepthPreviewParams", contrast, offset);
 		}
+
+		// Glow extract pass toggle: when true, the combined shader keeps only
+		// full-bright palette fragments or explicitly marked BloomGlow sprites.
+		// Used by Renderer.RenderGlowBloom() to populate the glow FBO.
+		public void SetGlowExtractParams(bool extractOnly)
+		{
+			shader.SetBool("GlowExtractOnly", extractOnly);
+		}
+
+		// True if any bloom/full-bright sprite has been submitted since the last
+		// reset. Every glow contributor (sprites, voxel FullBrightSprite, beams,
+		// railguns) funnels through DrawSprite, so this is a complete signal that
+		// lets WorldRenderer skip the glow extract+blur+composite passes entirely
+		// when nothing on screen glows (e.g. scrolling empty terrain at night).
+		public bool SubmittedGlowSource { get; private set; }
+
+		public void ResetGlowSourceTracking() => SubmittedGlowSource = false;
 
 		public void EnablePixelArtScaling(bool enabled)
 		{

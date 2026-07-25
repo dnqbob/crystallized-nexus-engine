@@ -25,11 +25,17 @@ namespace OpenRA.Graphics
 		// Palette and channel flags
 		public readonly uint C;
 
+		// Fullbright palette index ranges
+		public readonly uint D;
+
 		// Color tint
 		public readonly float R, G, B, A;
 
-		public Vertex(in float3 xyz, float s, float t, float u, float v, uint c)
-			: this(xyz.X, xyz.Y, xyz.Z, s, t, u, v, c, float3.Ones, 1f) { }
+		// Per-renderable bloom source multiplier
+		public readonly float BloomIntensity;
+
+		public Vertex(in float3 xyz, float s, float t, float u, float v, uint c, float bloomIntensity = 1f)
+			: this(xyz.X, xyz.Y, xyz.Z, s, t, u, v, c, 1f, 1f, 1f, 1f, 0u, bloomIntensity) { }
 
 		public Vertex(in float3 xyz, float s, float t, float u, float v, uint c, in float3 tint, float a)
 			: this(xyz.X, xyz.Y, xyz.Z, s, t, u, v, c, tint.X, tint.Y, tint.Z, a) { }
@@ -37,13 +43,16 @@ namespace OpenRA.Graphics
 		public Vertex(float x, float y, float z, float s, float t, float u, float v, uint c, in float3 tint, float a)
 			: this(x, y, z, s, t, u, v, c, tint.X, tint.Y, tint.Z, a) { }
 
-		public Vertex(float x, float y, float z, float s, float t, float u, float v, uint c, float r, float g, float b, float a)
+		public Vertex(float x, float y, float z, float s, float t, float u, float v, uint c, float r, float g, float b, float a,
+			uint d = 0, float bloomIntensity = 1f)
 		{
 			X = x; Y = y; Z = z;
 			S = s; T = t;
 			U = u; V = v;
 			C = c;
+			D = d;
 			R = r; G = g; B = b; A = a;
+			BloomIntensity = bloomIntensity;
 		}
 	}
 
@@ -58,7 +67,9 @@ namespace OpenRA.Graphics
 			new ShaderVertexAttribute("aVertexPosition", ShaderVertexAttributeType.Float, 3, 0),
 			new ShaderVertexAttribute("aVertexTexCoord", ShaderVertexAttributeType.Float, 4, 12),
 			new ShaderVertexAttribute("aVertexAttributes", ShaderVertexAttributeType.UInt, 1, 28),
-			new ShaderVertexAttribute("aVertexTint", ShaderVertexAttributeType.Float, 4, 32)
+			new ShaderVertexAttribute("aVertexFullBrightRanges", ShaderVertexAttributeType.UInt, 1, 32),
+			new ShaderVertexAttribute("aVertexTint", ShaderVertexAttributeType.Float, 4, 36),
+			new ShaderVertexAttribute("aVertexBloomIntensity", ShaderVertexAttributeType.Float, 1, 52)
 		];
 	}
 }

@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using OpenRA.Activities;
@@ -107,6 +108,15 @@ namespace OpenRA.Mods.Common.Activities
 				lastVisibleMaximumRange = attackAircraft.GetMaximumRangeVersusTarget(target);
 				lastVisibleOwner = target.Actor.Owner;
 				lastVisibleTargetTypes = target.Actor.GetEnabledTargetTypes();
+
+				var leeway = attackAircraft.Info.RangeMargin.Length;
+				if (leeway != 0 && target.Actor.Info.HasTraitInfo<IMoveInfo>())
+				{
+					var minimumRangeLength = attackAircraft.GetMinimumRangeVersusTarget(target).Length;
+					var preferMinRange = Math.Min(minimumRangeLength + leeway, lastVisibleMaximumRange.Length);
+					var preferMaxRange = Math.Max(lastVisibleMaximumRange.Length - leeway, minimumRangeLength);
+					lastVisibleMaximumRange = new WDist((lastVisibleMaximumRange.Length - leeway).Clamp(preferMinRange, preferMaxRange));
+				}
 			}
 
 			// The target may become hidden in the same tick the FlyAttack constructor is called,

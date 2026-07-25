@@ -44,7 +44,8 @@ namespace OpenRA
 		DoubleMultiplicative,
 		LowAdditive,
 		Screen,
-		Translucent
+		Translucent,
+		Overlay
 	}
 
 	public interface IPlatformWindow : IDisposable
@@ -84,6 +85,8 @@ namespace OpenRA
 
 	public interface IGraphicsContext : IDisposable
 	{
+		IVertexBuffer<T> CreateEmptyVertexBuffer<T>(IShaderBindings bindings, int size) where T : struct;
+		IVertexBuffer<T> CreateVertexBuffer<T>(IShaderBindings bindings, T[] data, bool dynamic = true) where T : struct;
 		IVertexBuffer<T> CreateEmptyVertexBuffer<T>(int size) where T : struct;
 		IVertexBuffer<T> CreateVertexBuffer<T>(T[] data, bool dynamic = true) where T : struct;
 		T[] CreateVertices<T>(int size) where T : struct;
@@ -91,6 +94,7 @@ namespace OpenRA
 		ITexture CreateTexture();
 		IFrameBuffer CreateFrameBuffer(Size s);
 		IFrameBuffer CreateFrameBuffer(Size s, Color clearColor);
+		IFrameBuffer CreateFrameBuffer(Size s, Color clearColor, bool withSecondaryColor);
 		IShader CreateShader(IShaderBindings shaderBindings);
 		void EnableScissor(int x, int y, int width, int height);
 		void DisableScissor();
@@ -98,7 +102,7 @@ namespace OpenRA
 		void DrawPrimitives(PrimitiveType pt, int firstVertex, int numVertices);
 		void DrawElements(int numIndices, int offset);
 		void Clear();
-		void EnableDepthBuffer();
+		void EnableDepthBuffer(bool clear = true);
 		void DisableDepthBuffer();
 		void ClearDepthBuffer();
 		void SetBlendMode(BlendMode mode);
@@ -130,8 +134,9 @@ namespace OpenRA
 		void Bind();
 	}
 
-	public interface IShader
+	public interface IShader : IDisposable
 	{
+		IShaderBindings Bindings { get; }
 		void SetBool(string name, bool value);
 		void SetVec(string name, float x);
 		void SetVec(string name, float x, float y);
@@ -168,10 +173,17 @@ namespace OpenRA
 	public interface IFrameBuffer : IDisposable
 	{
 		void Bind();
+
+		// Like Bind() but preserves existing colour/depth contents instead
+		// of clearing when returning to the world buffer after an offscreen
+		// post-processing pass.
+		void BindNoClear();
+
 		void Unbind();
 		void EnableScissor(Rectangle rect);
 		void DisableScissor();
 		ITexture Texture { get; }
+		ITexture SecondaryTexture { get; }
 	}
 
 	public enum PrimitiveType

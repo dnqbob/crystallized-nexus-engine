@@ -31,6 +31,9 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		const string MapSize = "label-mapchooser-random-map-size";
 
 		[FluentReference]
+		const string MapAspectRatio = "label-mapchooser-random-map-aspect-ratio";
+
+		[FluentReference]
 		const string RandomMap = "label-mapchooser-random-map-title";
 
 		[FluentReference]
@@ -57,12 +60,37 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		[FluentReference]
 		const string MapSizeHuge = "label-map-size-huge";
 
+		[FluentReference]
+		const string MapSizeGiant = "label-map-size-giant";
+
+		[FluentReference]
+		const string MapSizeEpic = "label-map-size-epic";
+
+		[FluentReference]
+		const string MapSizeLudicrous = "label-map-size-ludicrous";
+
 		public static readonly IReadOnlyDictionary<string, int2> MapSizes = new Dictionary<string, int2>()
 		{
 			{ MapSizeSmall, new int2(48, 60) },
 			{ MapSizeMedium, new int2(60, 90) },
 			{ MapSizeLarge, new int2(90, 120) },
 			{ MapSizeHuge, new int2(120, 160) },
+			{ MapSizeGiant, new int2(160, 200) },
+			{ MapSizeEpic, new int2(200, 240) },
+			{ MapSizeLudicrous, new int2(240, 300) },
+		};
+
+		public static readonly IReadOnlyDictionary<string, int2> MapAspectRatios = new Dictionary<string, int2>()
+		{
+			{ "1:1", new int2(1, 1) },
+			{ "2:1", new int2(2, 1) },
+			{ "1:2", new int2(1, 2) },
+			{ "3:1", new int2(3, 1) },
+			{ "1:3", new int2(1, 3) },
+			{ "3:2", new int2(3, 2) },
+			{ "2:3", new int2(2, 3) },
+			{ "4:3", new int2(4, 3) },
+			{ "3:4", new int2(3, 4) },
 		};
 
 		readonly ModData modData;
@@ -77,13 +105,16 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		readonly Widget dropdownOptionTemplate;
 		readonly Widget tilesetOption;
 		readonly Widget sizeOption;
+		readonly Widget aspectRatioOption;
 		readonly Widget parentWidget;
 
 		ITerrainInfo selectedTerrain;
 		string selectedSize;
+		string selectedAspectRatio;
 		bool initialGenerationDone;
 
 		volatile bool failed;
+		volatile string failedReason = "";
 		volatile uint generationCounter = 0;
 		volatile uint lastGeneration = 0;
 
@@ -99,7 +130,9 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			generator = modData.DefaultRules.Actors[SystemActors.EditorWorld].TraitInfos<IEditorMapGeneratorInfo>().First();
 			preview = widget.Get<GeneratedMapPreviewWidget>("PREVIEW");
 
-			widget.Get("ERROR").IsVisible = () => failed;
+			var errorLabel = widget.Get<LabelWidget>("ERROR");
+			errorLabel.IsVisible = () => failed;
+			errorLabel.GetText = () => failedReason;
 
 			var title = new CachedTransform<string, string>(id => FluentProvider.GetMessage(id));
 			var previewTitleLabel = widget.Get<LabelWidget>("TITLE");
@@ -195,6 +228,33 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				sizeDropdown.ShowDropDown("LABEL_DROPDOWN_TEMPLATE", MapSizes.Count * 30, MapSizes.Keys, SetupItem);
 			};
 
+			var aspectRatioLabel = FluentProvider.GetMessage(MapAspectRatio);
+			aspectRatioOption = dropdownOptionTemplate.Clone();
+			aspectRatioOption.Get<LabelWidget>("LABEL").GetText = () => aspectRatioLabel;
+
+			var aspectRatioDropdown = aspectRatioOption.Get<DropDownButtonWidget>("DROPDOWN");
+			aspectRatioDropdown.GetText = () => selectedAspectRatio;
+			aspectRatioDropdown.OnMouseDown = _ =>
+			{
+				ScrollItemWidget SetupItem(string aspectRatio, ScrollItemWidget template)
+				{
+					bool IsSelected() => aspectRatio == selectedAspectRatio;
+					void OnClick()
+					{
+						selectedAspectRatio = aspectRatio;
+						RandomizeSize();
+						GenerateMap();
+					}
+
+					var item = ScrollItemWidget.Setup(template, IsSelected, OnClick);
+					item.Get<LabelWidget>("LABEL").GetText = () => aspectRatio;
+					return item;
+				}
+
+				aspectRatioDropdown.ShowDropDown("LABEL_DROPDOWN_TEMPLATE",
+					MapAspectRatios.Count * 30, MapAspectRatios.Keys, SetupItem);
+			};
+
 			var generateButton = widget.Get<ButtonWidget>("BUTTON_GENERATE");
 			generateButton.IsDisabled = () => IsGenerating;
 			generateButton.OnClick = () =>
@@ -205,6 +265,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			};
 
 			selectedSize = MapSizes.Keys.Skip(1).First();
+			selectedAspectRatio = MapAspectRatios.Keys.First();
 			if (initialGeneratedMap != null)
 			{
 				// Make our own copy to prevent external mutation
@@ -220,9 +281,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				};
 
 				selectedTerrain = modData.DefaultTerrainInfo[generationArgs.Tileset];
-				foreach (var kv in MapSizes)
-					if (kv.Value.X > generationArgs.Size.Width && kv.Value.Y <= generationArgs.Size.Width)
-						selectedSize = kv.Key;
+				SelectSizeAndAspectRatio(generationArgs.Size);
 
 				RefreshOptions();
 
@@ -264,18 +323,42 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		{
 			var mapGrid = modData.GetOrCreate<MapGrid>();
 			var sizeRange = MapSizes[selectedSize];
-			var width = Game.CosmeticRandom.Next(sizeRange.X, sizeRange.Y);
-			var height = mapGrid.Type == MapGridType.RectangularIsometric ? width * 2 : width;
+			var baseSize = Game.CosmeticRandom.Next(sizeRange.X, sizeRange.Y);
+			var aspectRatio = MapAspectRatios[selectedAspectRatio];
+			var worldWidth = Math.Max(1, (int)Math.Round(baseSize * Math.Sqrt((double)aspectRatio.X / aspectRatio.Y)));
+			var worldHeight = Math.Max(1, (int)Math.Round(baseSize * Math.Sqrt((double)aspectRatio.Y / aspectRatio.X)));
+			var height = mapGrid.Type == MapGridType.RectangularIsometric ? worldHeight * 2 : worldHeight;
 
-			generationArgs.Size = new Size(width + 2, height + mapGrid.MaximumTerrainHeight * 2 + 2);
+			generationArgs.Size = new Size(worldWidth + 2, height + mapGrid.MaximumTerrainHeight * 2 + 2);
+		}
+
+		void SelectSizeAndAspectRatio(Size mapSize)
+		{
+			var mapGrid = modData.GetOrCreate<MapGrid>();
+			var playableWidth = Math.Max(1, mapSize.Width - 2);
+			var playableHeight = Math.Max(1, mapSize.Height - mapGrid.MaximumTerrainHeight * 2 - 2);
+			var worldHeight = mapGrid.Type == MapGridType.RectangularIsometric
+				? Math.Max(1, playableHeight / 2)
+				: playableHeight;
+
+			var baseSize = Math.Sqrt(playableWidth * worldHeight);
+			selectedSize = MapSizes
+				.OrderBy(kv => Math.Abs((kv.Value.X + kv.Value.Y) / 2.0 - baseSize))
+				.First().Key;
+
+			var currentRatio = (double)playableWidth / worldHeight;
+			selectedAspectRatio = MapAspectRatios
+				.OrderBy(kv => Math.Abs(Math.Log(currentRatio / ((double)kv.Value.X / kv.Value.Y))))
+				.First().Key;
 		}
 
 		void RefreshOptions()
 		{
 			optionsPanel.RemoveChildren();
-			tilesetOption.Bounds = sizeOption.Bounds = dropdownOptionTemplate.Bounds;
+			tilesetOption.Bounds = sizeOption.Bounds = aspectRatioOption.Bounds = dropdownOptionTemplate.Bounds;
 			optionsPanel.AddChild(tilesetOption);
 			optionsPanel.AddChild(sizeOption);
+			optionsPanel.AddChild(aspectRatioOption);
 
 			var trueString = FieldSaver.FormatValue(true);
 			var falseString = FieldSaver.FormatValue(false);
@@ -436,6 +519,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			var currentGeneration = Interlocked.Increment(ref generationCounter);
 
 			failed = false;
+			failedReason = "";
 			onGenerate(null, null);
 			preview.Clear();
 
@@ -450,11 +534,12 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 				{
 					map = generator.Generate(modData, generationArgs);
 				}
-				catch
+				catch (Exception e)
 				{
 					// We are the lastest generation request, mark as failed.
 					if (currentGeneration == generationCounter)
 					{
+						failedReason = e.Message;
 						lastGeneration = currentGeneration;
 						failed = true;
 					}

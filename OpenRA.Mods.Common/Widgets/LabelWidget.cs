@@ -33,10 +33,12 @@ namespace OpenRA.Mods.Common.Widgets
 		public Color ContrastColorLight = ChromeMetrics.Get<Color>("TextContrastColorLight");
 		public int ContrastRadius = ChromeMetrics.Get<int>("TextContrastRadius");
 		public bool WordWrap = false;
+		public bool Strikethrough = false;
 		public Func<string> GetText;
 		public Func<Color> GetColor;
 		public Func<Color> GetContrastColorDark;
 		public Func<Color> GetContrastColorLight;
+		public Func<bool> IsStrikethroughVisible;
 
 		[ObjectCreator.UseCtor]
 		public LabelWidget(ModData modData)
@@ -46,6 +48,7 @@ namespace OpenRA.Mods.Common.Widgets
 			GetColor = () => TextColor;
 			GetContrastColorDark = () => ContrastColorDark;
 			GetContrastColorLight = () => ContrastColorLight;
+			IsStrikethroughVisible = () => Strikethrough;
 		}
 
 		protected LabelWidget(LabelWidget other)
@@ -62,10 +65,12 @@ namespace OpenRA.Mods.Common.Widgets
 			ContrastRadius = other.ContrastRadius;
 			Shadow = other.Shadow;
 			WordWrap = other.WordWrap;
+			Strikethrough = other.Strikethrough;
 			GetText = other.GetText;
 			GetColor = other.GetColor;
 			GetContrastColorDark = other.GetContrastColorDark;
 			GetContrastColorLight = other.GetContrastColorLight;
+			IsStrikethroughVisible = other.IsStrikethroughVisible;
 		}
 
 		public void IncreaseHeightToFitCurrentText()
@@ -123,6 +128,13 @@ namespace OpenRA.Mods.Common.Widgets
 				font.DrawTextWithShadow(text, position, color, bgDark, bgLight, 1);
 			else
 				font.DrawText(text, position, color);
+
+			if (IsStrikethroughVisible())
+			{
+				var textSize = font.Measure(text);
+				var lineY = position.Y + (textSize.Y - font.TopOffset) / 2;
+				WidgetUtils.FillRectWithColor(new Rectangle(position.X, lineY, textSize.X, 1), color);
+			}
 		}
 
 		public override LabelWidget Clone() { return new LabelWidget(this); }

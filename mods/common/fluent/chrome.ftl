@@ -151,6 +151,27 @@ button-chat-chrome-mode =
 dropdownbutton-hpf-overlay-locomotor = Select Locomotor
 dropdownbutton-hpf-overlay-check = Select BlockedByActor
 
+## ingame-debug.yaml
+label-debug-panel-title = Debug Options
+checkbox-debug-panel-instant-build = Instant Build Speed
+checkbox-debug-panel-enable-tech = Build Everything
+checkbox-debug-panel-build-anywhere = Build Anywhere
+checkbox-debug-panel-unlimited-power = Unlimited Power
+checkbox-debug-panel-instant-charge = Instant Charge Time
+checkbox-debug-panel-disable-visibility-checks = Disable Visibility Checks
+button-debug-panel-give-cash = Give $20,000
+button-debug-panel-grow-resources = Grow Resources
+button-debug-panel-give-exploration = Clear Shroud
+button-debug-panel-reset-exploration = Reset Shroud
+label-debug-panel-visualizations-title = Visualizations
+checkbox-debug-panel-show-unit-paths = Show Unit Paths
+checkbox-debug-panel-show-customterrain-overlay = Show Custom Terrain
+checkbox-debug-panel-show-actor-tags = Show Actor Tags
+checkbox-debug-panel-show-combatoverlay = Show Combat Geometry
+checkbox-debug-panel-show-geometry = Show Render Geometry
+checkbox-debug-panel-show-terrain-overlay = Show Terrain Geometry
+checkbox-debug-panel-show-screenmap = Show Screen Map
+
 ## ingame-infoobjectives.yaml
 label-mission-objectives = Mission:
 
@@ -497,6 +518,7 @@ label-mapchooser-random-map-error = Map Generation Failed
 button-mapchooser-random-map-generate = Generate
 label-mapchooser-random-map-tileset = Environment:
 label-mapchooser-random-map-size = Map Size:
+label-mapchooser-random-map-aspect-ratio = Map Format:
 label-mapchooser-random-map-error-desc = Adjust the settings or try again.
 
 ## missionbrowser.yaml
@@ -678,6 +700,13 @@ checkbox-transients-container =
     .tooltip = Show transient text notifications for game events
 
 checkbox-pause-shellmap-container = Pause Menu Background
+checkbox-water-effects-container = Water Effects
+checkbox-cloud-shadows-container = Cloud Shadows
+checkbox-voxel-dynamics-container = Voxel Dynamics
+checkbox-tiberium-effects-container = Tiberium Effects
+checkbox-bloom-glow-container = Bloom Glow
+checkbox-screen-shake-container = Screen Shake
+label-grading-dropdown-container = Atmosphere:
 label-video-section-header = Video
 label-video-mode-dropdown-container = Video Mode:
 dropdownbutton-video-mode-dropdown-container = Windowed

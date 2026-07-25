@@ -28,7 +28,8 @@ namespace OpenRA.Graphics
 			this.parent = parent;
 		}
 
-		public void DrawLine(in float3 start, in float3 end, float width, Color startColor, Color endColor, BlendMode blendMode = BlendMode.Alpha)
+		public void DrawLine(in float3 start, in float3 end, float width, Color startColor, Color endColor,
+			BlendMode blendMode = BlendMode.Alpha, bool isBloomSource = false)
 		{
 			var delta = (end - start) / (end - start).XY.Length;
 			var corner = width / 2 * new float3(-delta.Y, delta.X, delta.Z);
@@ -45,15 +46,17 @@ namespace OpenRA.Graphics
 			var eb = endColor.B / 255.0f;
 			var ea = endColor.A / 255.0f;
 
-			vertices[0] = new Vertex(start - corner + Offset, sr, sg, sb, sa, 0);
-			vertices[1] = new Vertex(start + corner + Offset, sr, sg, sb, sa, 0);
-			vertices[2] = new Vertex(end + corner + Offset, er, eg, eb, ea, 0);
-			vertices[3] = new Vertex(end - corner + Offset, er, eg, eb, ea, 0);
+			var attribs = isBloomSource ? 0x4000u : 0u;
+			vertices[0] = new Vertex(start - corner + Offset, sr, sg, sb, sa, attribs);
+			vertices[1] = new Vertex(start + corner + Offset, sr, sg, sb, sa, attribs);
+			vertices[2] = new Vertex(end + corner + Offset, er, eg, eb, ea, attribs);
+			vertices[3] = new Vertex(end - corner + Offset, er, eg, eb, ea, attribs);
 
 			parent.DrawRGBAQuad(vertices, blendMode);
 		}
 
-		public void DrawLine(in float3 start, in float3 end, float width, Color color, BlendMode blendMode = BlendMode.Alpha)
+		public void DrawLine(in float3 start, in float3 end, float width, Color color, BlendMode blendMode = BlendMode.Alpha,
+			bool ignoreWorldTint = false, bool isBloomSource = false, float bloomIntensity = 1f)
 		{
 			var delta = (end - start) / (end - start).XY.Length;
 			var corner = width / 2 * new float2(-delta.Y, delta.X);
@@ -64,10 +67,11 @@ namespace OpenRA.Graphics
 			var b = color.B / 255.0f;
 			var a = color.A / 255.0f;
 
-			vertices[0] = new Vertex(start - corner + Offset, r, g, b, a, 0);
-			vertices[1] = new Vertex(start + corner + Offset, r, g, b, a, 0);
-			vertices[2] = new Vertex(end + corner + Offset, r, g, b, a, 0);
-			vertices[3] = new Vertex(end - corner + Offset, r, g, b, a, 0);
+			var attribs = (ignoreWorldTint ? 0x1000u : 0u) | (isBloomSource ? 0x4000u : 0u);
+			vertices[0] = new Vertex(start - corner + Offset, r, g, b, a, attribs, bloomIntensity);
+			vertices[1] = new Vertex(start + corner + Offset, r, g, b, a, attribs, bloomIntensity);
+			vertices[2] = new Vertex(end + corner + Offset, r, g, b, a, attribs, bloomIntensity);
+			vertices[3] = new Vertex(end - corner + Offset, r, g, b, a, attribs, bloomIntensity);
 			parent.DrawRGBAQuad(vertices, blendMode);
 		}
 
@@ -86,7 +90,8 @@ namespace OpenRA.Graphics
 			return new float3(x / d, y / d, 0.5f * (a.Z + b.Z));
 		}
 
-		void DrawDisconnectedLine(IEnumerable<float3> points, float width, Color color, BlendMode blendMode)
+		void DrawDisconnectedLine(IEnumerable<float3> points, float width, Color color, BlendMode blendMode, bool ignoreWorldTint,
+			bool isBloomSource)
 		{
 			using (var e = points.GetEnumerator())
 			{
@@ -97,13 +102,14 @@ namespace OpenRA.Graphics
 				while (e.MoveNext())
 				{
 					var point = e.Current;
-					DrawLine(lastPoint, point, width, color, blendMode);
+					DrawLine(lastPoint, point, width, color, blendMode, ignoreWorldTint, isBloomSource);
 					lastPoint = point;
 				}
 			}
 		}
 
-		void DrawConnectedLine(float3[] points, float width, Color color, bool closed, BlendMode blendMode)
+		void DrawConnectedLine(float3[] points, float width, Color color, bool closed, BlendMode blendMode, bool ignoreWorldTint,
+			bool isBloomSource)
 		{
 			// Not a line
 			if (points.Length < 2)
@@ -112,7 +118,7 @@ namespace OpenRA.Graphics
 			// Single segment
 			if (points.Length == 2)
 			{
-				DrawLine(points[0], points[1], width, color, blendMode);
+				DrawLine(points[0], points[1], width, color, blendMode, ignoreWorldTint, isBloomSource);
 				return;
 			}
 
@@ -121,6 +127,8 @@ namespace OpenRA.Graphics
 			var g = color.G / 255.0f;
 			var b = color.B / 255.0f;
 			var a = color.A / 255.0f;
+
+			var attribs = (ignoreWorldTint ? 0x1000u : 0u) | (isBloomSource ? 0x4000u : 0u);
 
 			var start = points[0];
 			var end = points[1];
@@ -153,10 +161,10 @@ namespace OpenRA.Graphics
 				var cd = closed || i < limit - 1 ? IntersectionOf(end - corner, dir, end - nextCorner, nextDir) : end - corner;
 
 				// Fill segment
-				vertices[0] = new Vertex(ca + Offset, r, g, b, a, 0);
-				vertices[1] = new Vertex(cb + Offset, r, g, b, a, 0);
-				vertices[2] = new Vertex(cc + Offset, r, g, b, a, 0);
-				vertices[3] = new Vertex(cd + Offset, r, g, b, a, 0);
+				vertices[0] = new Vertex(ca + Offset, r, g, b, a, attribs);
+				vertices[1] = new Vertex(cb + Offset, r, g, b, a, attribs);
+				vertices[2] = new Vertex(cc + Offset, r, g, b, a, attribs);
+				vertices[3] = new Vertex(cd + Offset, r, g, b, a, attribs);
 				parent.DrawRGBAQuad(vertices, blendMode);
 
 				// Advance line segment
@@ -169,22 +177,29 @@ namespace OpenRA.Graphics
 			}
 		}
 
-		public void DrawLine(IEnumerable<float3> points, float width, Color color, bool connectSegments = false, BlendMode blendMode = BlendMode.Alpha)
+		public void DrawLine(
+			IEnumerable<float3> points,
+			float width,
+			Color color,
+			bool connectSegments = false,
+			BlendMode blendMode = BlendMode.Alpha,
+			bool ignoreWorldTint = false,
+			bool isBloomSource = false)
 		{
 			if (!connectSegments)
-				DrawDisconnectedLine(points, width, color, blendMode);
+				DrawDisconnectedLine(points, width, color, blendMode, ignoreWorldTint, isBloomSource);
 			else
-				DrawConnectedLine(points as float3[] ?? points.ToArray(), width, color, false, blendMode);
+				DrawConnectedLine(points as float3[] ?? points.ToArray(), width, color, false, blendMode, ignoreWorldTint, isBloomSource);
 		}
 
 		public void DrawPolygon(float3[] vertices, float width, Color color, BlendMode blendMode = BlendMode.Alpha)
 		{
-			DrawConnectedLine(vertices, width, color, true, blendMode);
+			DrawConnectedLine(vertices, width, color, true, blendMode, false, false);
 		}
 
 		public void DrawPolygon(float2[] vertices, float width, Color color, BlendMode blendMode = BlendMode.Alpha)
 		{
-			DrawConnectedLine(vertices.Select(v => new float3(v, 0)).ToArray(), width, color, true, blendMode);
+			DrawConnectedLine(vertices.Select(v => new float3(v, 0)).ToArray(), width, color, true, blendMode, false, false);
 		}
 
 		public void DrawRect(in float3 tl, in float3 br, float width, Color color, BlendMode blendMode = BlendMode.Alpha)
@@ -201,7 +216,8 @@ namespace OpenRA.Graphics
 			FillRect(tl, tr, br, bl, color, blendMode);
 		}
 
-		public void FillRect(in float3 a, in float3 b, in float3 c, in float3 d, Color color, BlendMode blendMode = BlendMode.Alpha)
+		public void FillRect(in float3 a, in float3 b, in float3 c, in float3 d, Color color, BlendMode blendMode = BlendMode.Alpha,
+			bool ignoreWorldTint = false, bool isBloomSource = false, float bloomIntensity = 1f)
 		{
 			color = Util.PremultiplyAlpha(color);
 			var cr = color.R / 255.0f;
@@ -209,25 +225,28 @@ namespace OpenRA.Graphics
 			var cb = color.B / 255.0f;
 			var ca = color.A / 255.0f;
 
-			vertices[0] = new Vertex(a + Offset, cr, cg, cb, ca, 0);
-			vertices[1] = new Vertex(b + Offset, cr, cg, cb, ca, 0);
-			vertices[2] = new Vertex(c + Offset, cr, cg, cb, ca, 0);
-			vertices[3] = new Vertex(d + Offset, cr, cg, cb, ca, 0);
+			var attribs = (ignoreWorldTint ? 0x1000u : 0u) | (isBloomSource ? 0x4000u : 0u);
+			vertices[0] = new Vertex(a + Offset, cr, cg, cb, ca, attribs, bloomIntensity);
+			vertices[1] = new Vertex(b + Offset, cr, cg, cb, ca, attribs, bloomIntensity);
+			vertices[2] = new Vertex(c + Offset, cr, cg, cb, ca, attribs, bloomIntensity);
+			vertices[3] = new Vertex(d + Offset, cr, cg, cb, ca, attribs, bloomIntensity);
 			parent.DrawRGBAQuad(vertices, blendMode);
 		}
 
 		public void FillRect(in float3 a, in float3 b, in float3 c, in float3 d,
-			Color topLeftColor, Color topRightColor, Color bottomRightColor, Color bottomLeftColor, BlendMode blendMode = BlendMode.Alpha)
+			Color topLeftColor, Color topRightColor, Color bottomRightColor, Color bottomLeftColor, BlendMode blendMode = BlendMode.Alpha,
+			bool ignoreWorldTint = false, bool isBloomSource = false, float bloomIntensity = 1f)
 		{
-			vertices[0] = VertexWithColor(a + Offset, topLeftColor);
-			vertices[1] = VertexWithColor(b + Offset, topRightColor);
-			vertices[2] = VertexWithColor(c + Offset, bottomRightColor);
-			vertices[3] = VertexWithColor(d + Offset, bottomLeftColor);
+			var attribs = (ignoreWorldTint ? 0x1000u : 0u) | (isBloomSource ? 0x4000u : 0u);
+			vertices[0] = VertexWithColor(a + Offset, topLeftColor, attribs, bloomIntensity);
+			vertices[1] = VertexWithColor(b + Offset, topRightColor, attribs, bloomIntensity);
+			vertices[2] = VertexWithColor(c + Offset, bottomRightColor, attribs, bloomIntensity);
+			vertices[3] = VertexWithColor(d + Offset, bottomLeftColor, attribs, bloomIntensity);
 
 			parent.DrawRGBAQuad(vertices, blendMode);
 		}
 
-		static Vertex VertexWithColor(in float3 xyz, Color color)
+		static Vertex VertexWithColor(in float3 xyz, Color color, uint attribs = 0, float bloomIntensity = 1f)
 		{
 			color = Util.PremultiplyAlpha(color);
 			var cr = color.R / 255.0f;
@@ -235,7 +254,7 @@ namespace OpenRA.Graphics
 			var cb = color.B / 255.0f;
 			var ca = color.A / 255.0f;
 
-			return new Vertex(xyz, cr, cg, cb, ca, 0);
+			return new Vertex(xyz, cr, cg, cb, ca, attribs, bloomIntensity);
 		}
 
 		public void FillEllipse(in float3 tl, in float3 br, Color color, BlendMode blendMode = BlendMode.Alpha)
