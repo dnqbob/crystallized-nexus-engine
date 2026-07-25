@@ -23,12 +23,13 @@ Container@MAINMENU:
 		Label@VERSION_LABEL:
 			Logic: VersionLabelLogic
 			X: WINDOW_WIDTH - 296
-			Y: 296 - 20
+			Y: 296 - 34
 			Width: 296 - 20
-			Height: 25
+			Height: 39
 			Align: Center
 			Font: Regular
 			Shadow: true
+			WordWrap: true
 		Container@MENUS:
 			X: 13 + (WINDOW_WIDTH - 522) / 4 - WIDTH / 2
 			Y: WINDOW_HEIGHT / 2 - HEIGHT / 2

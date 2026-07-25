@@ -18,7 +18,7 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 		[ObjectCreator.UseCtor]
 		public VersionLabelLogic(LabelWidget widget, ModData modData)
 		{
-			var versionText = modData.Manifest.Metadata.Version;
+			var versionText = $"{modData.Manifest.Metadata.Version} (engine {Game.EngineVersion})";
 			widget.GetText = () => versionText;
 		}
 	}
