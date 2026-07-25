@@ -11,6 +11,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.ExceptionServices;
 using System.Threading;
 using OpenRA.Primitives;
@@ -44,6 +45,7 @@ namespace OpenRA.Platforms.Default
 		Func<string> getGLVersion;
 		Func<ITexture> getCreateTexture;
 		Func<object, IFrameBuffer> getCreateFrameBuffer;
+		Func<object, IFrameBuffer> getCreateFrameBufferWithSecondaryColor;
 		Func<object, IShader> getCreateShader;
 		Func<object, object> getCreateEmptyVertexBuffer;
 		Func<object, object> getCreateVertexBuffer;
@@ -92,19 +94,24 @@ namespace OpenRA.Platforms.Default
 					getCreateFrameBuffer =
 						tuple =>
 						{
-							var t = ((Size, Color, bool))tuple;
-							var texture = (ITextureInternal)CreateTexture();
-							var secondaryTexture = t.Item3 ? (ITextureInternal)CreateTexture() : null;
+							var t = ((Size, Color))tuple;
 							return new ThreadedFrameBuffer(this,
-								context.CreateFrameBuffer(t.Item1, texture, secondaryTexture, t.Item2));
+								context.CreateFrameBuffer(t.Item1, (ITextureInternal)CreateTexture(), t.Item2));
+						};
+					getCreateFrameBufferWithSecondaryColor =
+						tuple =>
+						{
+							var t = ((Size, Color, bool))tuple;
+							return new ThreadedFrameBuffer(this, context.CreateFrameBuffer(t.Item1, t.Item2, t.Item3));
 						};
 					getCreateShader = bindings => new ThreadedShader(this, context.CreateShader((IShaderBindings)bindings));
 					getCreateEmptyVertexBuffer =
 						tuple =>
 						{
 							(var bindings, object t, var type) = ((IShaderBindings, int, Type))tuple;
-							var vertexBuffer = context.GetType()
-								.GetMethod(nameof(CreateEmptyVertexBuffer))
+							var method = context.GetType().GetMethods()
+								.First(m => m.Name == nameof(CreateEmptyVertexBuffer) && m.GetParameters().Length == 2);
+							var vertexBuffer = method
 								.MakeGenericMethod(type)
 								.Invoke(context, [bindings, t]);
 
@@ -114,8 +121,9 @@ namespace OpenRA.Platforms.Default
 						tuple =>
 						{
 							var (bindings, array, dynamic, type) = ((IShaderBindings, object, bool, Type))tuple;
-							var vertexBuffer = context.GetType()
-								.GetMethod(nameof(CreateVertexBuffer))
+							var method = context.GetType().GetMethods()
+								.First(m => m.Name == nameof(CreateVertexBuffer) && m.GetParameters().Length == 3);
+							var vertexBuffer = method
 								.MakeGenericMethod(type)
 								.Invoke(context, [bindings, array, dynamic]);
 							return typeof(ThreadedVertexBuffer<>).MakeGenericType(type).GetConstructors()[0].Invoke([this, vertexBuffer]);
@@ -425,17 +433,17 @@ namespace OpenRA.Platforms.Default
 
 		public IFrameBuffer CreateFrameBuffer(Size s)
 		{
-			return Send(getCreateFrameBuffer, (s, Color.FromArgb(0), false));
+			return Send(getCreateFrameBuffer, (s, Color.FromArgb(0)));
 		}
 
 		public IFrameBuffer CreateFrameBuffer(Size s, Color clearColor)
 		{
-			return Send(getCreateFrameBuffer, (s, clearColor, false));
+			return Send(getCreateFrameBuffer, (s, clearColor));
 		}
 
 		public IFrameBuffer CreateFrameBuffer(Size s, Color clearColor, bool withSecondaryColor)
 		{
-			return Send(getCreateFrameBuffer, (s, clearColor, withSecondaryColor));
+			return Send(getCreateFrameBufferWithSecondaryColor, (s, clearColor, withSecondaryColor));
 		}
 
 		public IShader CreateShader(IShaderBindings bindings)
@@ -456,6 +464,16 @@ namespace OpenRA.Platforms.Default
 		public IVertexBuffer<T> CreateVertexBuffer<T>(IShaderBindings bindings, T[] data, bool dynamic = true) where T : struct
 		{
 			return (IVertexBuffer<T>)Send(getCreateVertexBuffer, (bindings, (object)data, dynamic, typeof(T)));
+		}
+
+		public IVertexBuffer<T> CreateEmptyVertexBuffer<T>(int size) where T : struct
+		{
+			return CreateEmptyVertexBuffer<T>(null, size);
+		}
+
+		public IVertexBuffer<T> CreateVertexBuffer<T>(T[] data, bool dynamic = true) where T : struct
+		{
+			return CreateVertexBuffer(null, data, dynamic);
 		}
 
 		public IIndexBuffer CreateIndexBuffer(uint[] indices)
@@ -778,6 +796,7 @@ namespace OpenRA.Platforms.Default
 	sealed class ThreadedShader : IShader
 	{
 		public IShaderBindings Bindings { get; }
+
 		readonly ThreadedGraphicsContext device;
 		readonly Action prepareRender;
 		readonly Action<object> setBool;
@@ -795,6 +814,7 @@ namespace OpenRA.Platforms.Default
 			this.device = device;
 			Bindings = shader.Bindings;
 			bind = shader.Bind;
+			dispose = shader.Dispose;
 			prepareRender = shader.PrepareRender;
 			setBool = tuple => { var t = ((string, bool))tuple; shader.SetBool(t.Item1, t.Item2); };
 			setMatrix = tuple => { var t = ((string, float[]))tuple; shader.SetMatrix(t.Item1, t.Item2); };
@@ -803,7 +823,6 @@ namespace OpenRA.Platforms.Default
 			setVec2 = tuple => { var t = ((string, ReadOnlyMemory<float>, int))tuple; shader.SetVec(t.Item1, t.Item2, t.Item3); };
 			setVec3 = tuple => { var t = ((string, float, float))tuple; shader.SetVec(t.Item1, t.Item2, t.Item3); };
 			setVec4 = tuple => { var t = ((string, float, float, float))tuple; shader.SetVec(t.Item1, t.Item2, t.Item3, t.Item4); };
-			dispose = shader.Dispose;
 		}
 
 		public void Bind()

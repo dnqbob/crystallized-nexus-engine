@@ -87,6 +87,8 @@ namespace OpenRA
 	{
 		IVertexBuffer<T> CreateEmptyVertexBuffer<T>(IShaderBindings bindings, int size) where T : struct;
 		IVertexBuffer<T> CreateVertexBuffer<T>(IShaderBindings bindings, T[] data, bool dynamic = true) where T : struct;
+		IVertexBuffer<T> CreateEmptyVertexBuffer<T>(int size) where T : struct;
+		IVertexBuffer<T> CreateVertexBuffer<T>(T[] data, bool dynamic = true) where T : struct;
 		T[] CreateVertices<T>(int size) where T : struct;
 		IIndexBuffer CreateIndexBuffer(uint[] indices);
 		ITexture CreateTexture();

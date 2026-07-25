@@ -88,20 +88,12 @@ namespace OpenRA.Mods.Common.Activities
 			if (dat != desiredAltitude || move.Z != 0 || aircraft.CenterPosition.Z != desiredZ)
 			{
 				var maxDelta = move.HorizontalLength * aircraft.Info.MaximumPitch.Tan() / 1024;
-				if (move.Z == 0 && aircraft.Info.AltitudeVelocity.Length > 0)
-					maxDelta = Math.Min(maxDelta, aircraft.Info.AltitudeVelocity.Length);
-
 				var moveZ = move.Z != 0 ? move.Z : desiredZ - aircraft.CenterPosition.Z;
 				var deltaZ = moveZ.Clamp(-maxDelta, maxDelta);
 				move = new WVec(move.X, move.Y, deltaZ);
 			}
 
 			aircraft.SetPosition(self, aircraft.CenterPosition + move);
-		}
-
-		public static void FlyTick(Actor self, Aircraft aircraft, WAngle desiredFacing, WDist desiredAltitude, bool idleTurn = false)
-		{
-			FlyTick(self, aircraft, desiredFacing, desiredAltitude, WVec.Zero, idleTurn);
 		}
 
 		static int TerrainHeightAt(Map map, in WPos pos)
@@ -126,6 +118,11 @@ namespace OpenRA.Mods.Common.Activities
 			}
 
 			return sum / Samples;
+		}
+
+		public static void FlyTick(Actor self, Aircraft aircraft, WAngle desiredFacing, WDist desiredAltitude, bool idleTurn = false)
+		{
+			FlyTick(self, aircraft, desiredFacing, desiredAltitude, WVec.Zero, idleTurn);
 		}
 
 		// Should only be used for vertical-only movement, usually VTOL take-off or land. Terrain-induced altitude changes should always be handled by FlyTick.

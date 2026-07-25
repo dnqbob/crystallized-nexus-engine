@@ -46,15 +46,15 @@ namespace OpenRA.Platforms.Default
 			public OpenAlSound Sound;
 		}
 
-		const int MaxInstancesPerFrame = 10;
+		const int MaxInstancesPerFrame = 3;
 		const int GroupDistance = 2730;
 		const int GroupDistanceSqr = GroupDistance * GroupDistance;
 
 		// https://github.com/kcat/openal-soft/issues/580
 		// https://github.com/kcat/openal-soft/blob/b6aa73b26004afe63d83097f2f91ecda9bc25cb9/alc/alc.cpp#L3191-L3203
-		const int DesiredPoolSize = 512;
+		const int PoolSize = 256;
 
-		readonly Dictionary<uint, PoolSlot> sourcePool = new(DesiredPoolSize);
+		readonly Dictionary<uint, PoolSlot> sourcePool = new(PoolSize);
 		float volume = 1f;
 		IntPtr device;
 		IntPtr context;
@@ -135,7 +135,7 @@ namespace OpenRA.Platforms.Default
 				throw new InvalidOperationException("Can't create OpenAL context");
 			ALC10.alcMakeContextCurrent(context);
 
-			for (var i = 0; i < DesiredPoolSize; i++)
+			for (var i = 0; i < PoolSize; i++)
 			{
 				AL10.alGenSources(1, out var source);
 				if (AL10.alGetError() != AL10.AL_NO_ERROR)
@@ -239,8 +239,7 @@ namespace OpenRA.Platforms.Default
 				}
 
 				// Attenuate a little bit based on number of active sounds:
-				var poolSize = sourcePool.Count;
-				atten = 0.66f * ((poolSize - activeCount * 0.5f) / poolSize);
+				atten = 0.66f * ((PoolSize - activeCount * 0.5f) / PoolSize);
 			}
 
 			if (!TryGetSourceFromPool(out var source))
@@ -311,14 +310,14 @@ namespace OpenRA.Platforms.Default
 				AL10.alSourcePlay(source);
 		}
 
-		public void SetSoundVolume(float volume, ISound music, ISound video)
+		public void SetSoundVolume(float volume, IEnumerable<ISound> excluded)
 		{
+			var excludedSources = new HashSet<uint>(excluded?.Select(s => ((OpenAlSound)s).Source) ?? Enumerable.Empty<uint>());
 			var sounds = sourcePool.Keys.Where(key =>
 			{
 				AL10.alGetSourcei(key, AL10.AL_SOURCE_STATE, out var state);
 				return (state == AL10.AL_PLAYING || state == AL10.AL_PAUSED) &&
-					   (music == null || key != ((OpenAlSound)music).Source) &&
-					   (video == null || key != ((OpenAlSound)video).Source);
+					   !excludedSources.Contains(key);
 			});
 
 			foreach (var s in sounds)
@@ -338,10 +337,8 @@ namespace OpenRA.Platforms.Default
 
 		public void SetListenerPosition(WPos position)
 		{
-			// The listener elevation (height out of the battlefield plane, so sounds
-			// near screen centre aren't over-positional) is supplied by the caller
-			// so it can scale with the camera zoom.
-			AL10.alListener3f(AL10.AL_POSITION, position.X, position.Y, position.Z);
+			// Move the listener out of the plane so that sounds near the middle of the screen aren't too positional
+			AL10.alListener3f(AL10.AL_POSITION, position.X, position.Y, position.Z + 2133);
 
 			var orientation = new[] { 0f, 0f, 1f, 0f, -1f, 0f };
 			AL10.alListenerfv(AL10.AL_ORIENTATION, orientation);
@@ -375,7 +372,7 @@ namespace OpenRA.Platforms.Default
 				StopAllSounds();
 
 			if (sourcePool.Count > 0)
-				AL10.alDeleteSources(sourcePool.Count, sourcePool.Keys.ToArray());
+				AL10.alDeleteSources(PoolSize, sourcePool.Keys.ToArray());
 
 			sourcePool.Clear();
 

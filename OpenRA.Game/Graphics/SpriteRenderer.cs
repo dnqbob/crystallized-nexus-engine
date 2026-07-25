@@ -13,102 +13,62 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using OpenRA.Primitives;
-using OpenRA.Support;
 
 namespace OpenRA.Graphics
 {
 	public class SpriteRenderer : Renderer.IBatchRenderer
 	{
-		struct BlendSpan
-		{
-			public readonly int Start;
-			public int Length;
-			public readonly BlendMode Mode;
-
-			public BlendSpan(int start, int length, BlendMode mode)
-			{
-				Start = start;
-				Length = length;
-				Mode = mode;
-			}
-		}
-
 		public const int SheetCount = 8;
 		static readonly string[] SheetIndexToTextureName = Exts.MakeArray(SheetCount, i => $"Texture{i}");
 		static readonly int UintSize = Marshal.SizeOf<uint>();
 
-		public readonly IShader Shader;
 		readonly Renderer renderer;
-		readonly IVertexBuffer<Vertex> vertexBuffer;
-		readonly IIndexBuffer indexBuffer;
+		public IShader Shader => shader;
+		readonly IShader shader;
 
 		Vertex[] vertices;
 		readonly Sheet[] sheets = new Sheet[SheetCount];
 
-		readonly List<BlendSpan> blendSpans = [];
+		BlendMode currentBlend = BlendMode.Alpha;
 		int vertexCount = 0;
 		int sheetCount = 0;
 
-		public SpriteRenderer(Renderer renderer, IVertexBuffer<Vertex> tempVertexBuffer, IIndexBuffer tempIndexBuffer, IShader shader)
+		public SpriteRenderer(Renderer renderer, IShader shader)
 		{
-			Shader = shader;
 			this.renderer = renderer;
-			vertexBuffer = tempVertexBuffer;
-			indexBuffer = tempIndexBuffer;
+			this.shader = shader;
 			vertices = renderer.Context.CreateVertices<Vertex>(renderer.TempVertexBufferSize);
-		}
-
-		void AddBlendSpan(BlendMode blendMode)
-		{
-			if (blendSpans.Count == 0 || blendSpans[^1].Mode != blendMode)
-				blendSpans.Add(new BlendSpan(vertexCount, 4, blendMode));
-			else
-			{
-				// PERF: modify in-place.
-				var span = CollectionsMarshal.AsSpan(blendSpans);
-				span[^1].Length += 4;
-			}
 		}
 
 		public void Flush()
 		{
-			if (vertexCount <= 0)
-				return;
-
-			for (var i = 0; i < sheetCount; i++)
-				Shader.SetTexture(SheetIndexToTextureName[i], sheets[i].GetTexture());
-
-			Shader.PrepareRender();
-			vertexBuffer.SetData(ref vertices, vertexCount);
-			vertexBuffer.Bind();
-			indexBuffer.Bind();
-			Shader.Bind();
-
-			// PERF: this allows us to batch render sprites with interleaved blend modes
-			// without expensive binding and data writing between draw calls.
-			foreach (var span in blendSpans)
+			if (vertexCount > 0)
 			{
-				if (span.Length <= 0)
-					continue;
+				for (var i = 0; i < sheetCount; i++)
+				{
+					shader.SetTexture(SheetIndexToTextureName[i], sheets[i].GetTexture());
+					sheets[i] = null;
+				}
 
-				renderer.Context.SetBlendMode(span.Mode);
-				renderer.Context.DrawElements(span.Length / 4 * 6, span.Start * 6);
+				renderer.Context.SetBlendMode(currentBlend);
+				shader.PrepareRender();
+
+				renderer.DrawQuadBatch(ref vertices, shader, vertexCount);
+				renderer.Context.SetBlendMode(BlendMode.None);
+
+				vertexCount = 0;
+				sheetCount = 0;
 			}
-
-			renderer.Context.SetBlendMode(BlendMode.None);
-			PerfHistory.Increment("batches", 1);
-			blendSpans.Clear();
-			Array.Clear(sheets, 0, SheetCount);
-			vertexCount = 0;
-			sheetCount = 0;
 		}
 
 		int2 SetRenderStateForSprite(Sprite s)
 		{
 			renderer.CurrentBatchRenderer = this;
 
-			if (vertexCount + 4 > renderer.TempVertexBufferSize)
+			if (s.BlendMode != currentBlend || vertexCount + 4 > renderer.TempVertexBufferSize)
 				Flush();
+
+			currentBlend = s.BlendMode;
 
 			// Check if the sheet (or secondary data sheet) have already been mapped
 			var sheet = s.Sheet;
@@ -152,8 +112,6 @@ namespace OpenRA.Graphics
 				sheets[secondarySheetIndex] = ss.SecondarySheet;
 				sheetCount++;
 			}
-
-			AddBlendSpan(s.BlendMode);
 
 			return new int2(sheetIndex, secondarySheetIndex);
 		}
@@ -206,7 +164,15 @@ namespace OpenRA.Graphics
 			vertexCount += 4;
 		}
 
-		internal void DrawSprite(Sprite s, PaletteReference pal, in float3 location, in float3 scale, in float3 tint, float alpha,
+		public void DrawSprite(Sprite s, PaletteReference pal, in float3 location, float scale, in float3 tint, float alpha,
+			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0, bool isBloomSource = false,
+			float bloomIntensity = 1f)
+		{
+			DrawSprite(s, ResolveTextureIndex(s, pal), location, scale, tint, alpha, rotation, ignoreWorldTint, fullBrightPaletteRanges, isBloomSource,
+				bloomIntensity);
+		}
+
+		internal void DrawSprite(Sprite s, int paletteTextureIndex, in float3 location, in float3 scale, in float3 tint, float alpha,
 			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0, bool isBloomSource = false,
 			float bloomIntensity = 1f)
 		{
@@ -214,12 +180,12 @@ namespace OpenRA.Graphics
 				SubmittedGlowSource = true;
 
 			var samplers = SetRenderStateForSprite(s);
-			Util.FastCreateQuad(vertices, location + scale * s.Offset, s, samplers, ResolveTextureIndex(s, pal), vertexCount, scale * s.Size, tint, alpha,
+			Util.FastCreateQuad(vertices, location + scale * s.Offset, s, samplers, paletteTextureIndex, vertexCount, scale * s.Size, tint, alpha,
 								rotation, ignoreWorldTint, fullBrightPaletteRanges, isBloomSource, bloomIntensity);
 			vertexCount += 4;
 		}
 
-		public void DrawSprite(Sprite s, PaletteReference pal, in float3 location, float scale, in float3 tint, float alpha,
+		public void DrawSprite(Sprite s, PaletteReference pal, in float3 location, in float3 scale, in float3 tint, float alpha,
 			float rotation = 0f, bool ignoreWorldTint = false, uint fullBrightPaletteRanges = 0, bool isBloomSource = false,
 			float bloomIntensity = 1f)
 		{
@@ -239,7 +205,7 @@ namespace OpenRA.Graphics
 			vertexCount += 4;
 		}
 
-		public void DrawVertexBuffer(IVertexBuffer<Vertex> buffer, int start, int length, IEnumerable<Sheet> sheets, BlendMode blendMode)
+		public void DrawVertexBuffer(IVertexBuffer<Vertex> buffer, IIndexBuffer indices, int start, int length, IEnumerable<Sheet> sheets, BlendMode blendMode)
 		{
 			var i = 0;
 			foreach (var s in sheets)
@@ -248,12 +214,12 @@ namespace OpenRA.Graphics
 					ThrowSheetOverflow(nameof(sheets));
 
 				if (s != null)
-					Shader.SetTexture(SheetIndexToTextureName[i++], s.GetTexture());
+					shader.SetTexture(SheetIndexToTextureName[i++], s.GetTexture());
 			}
 
 			renderer.Context.SetBlendMode(blendMode);
-			Shader.PrepareRender();
-			renderer.DrawQuadBatch(buffer, Shader, length, UintSize * start);
+			shader.PrepareRender();
+			renderer.DrawQuadBatch(buffer, indices, shader, length, UintSize * start);
 			renderer.Context.SetBlendMode(BlendMode.None);
 		}
 
@@ -268,10 +234,10 @@ namespace OpenRA.Graphics
 		{
 			renderer.CurrentBatchRenderer = this;
 
-			if (vertexCount + 4 > renderer.TempVertexBufferSize)
+			if (currentBlend != blendMode || vertexCount + 4 > renderer.TempVertexBufferSize)
 				Flush();
 
-			AddBlendSpan(blendMode);
+			currentBlend = blendMode;
 
 			Array.Copy(v, 0, vertices, vertexCount, v.Length);
 			vertexCount += 4;
@@ -279,9 +245,9 @@ namespace OpenRA.Graphics
 
 		public void SetPalette(HardwarePalette palette)
 		{
-			Shader.SetTexture("Palette", palette.Texture);
-			Shader.SetTexture("ColorShifts", palette.ColorShifts);
-			Shader.SetVec("PaletteRows", palette.Height);
+			shader.SetTexture("Palette", palette.Texture);
+			shader.SetTexture("ColorShifts", palette.ColorShifts);
+			shader.SetVec("PaletteRows", palette.Height);
 		}
 
 		public void SetViewportParams(Size sheetSize, int downscale, float depthMargin, int2 scroll)
@@ -308,10 +274,10 @@ namespace OpenRA.Graphics
 			//   extend beyond the top of bottom edges of the screen may be pushed outside [-1, 1] and
 			//   culled by the GPU. We avoid this by forcing everything into the z = 0 plane.
 			var depth = depthMargin != 0f ? 2f / (downscale * (sheetSize.Height + depthMargin)) : 0;
-			Shader.SetVec("DepthTextureScale", 128 * depth);
-			Shader.SetVec("Scroll", scroll.X, scroll.Y, depthMargin != 0f ? scroll.Y : 0);
-			Shader.SetVec("p1", width, height, -depth);
-			Shader.SetVec("p2", -1, -1, depthMargin != 0f ? 1 : 0);
+			shader.SetVec("DepthTextureScale", 128 * depth);
+			shader.SetVec("Scroll", scroll.X, scroll.Y, depthMargin != 0f ? scroll.Y : 0);
+			shader.SetVec("p1", width, height, -depth);
+			shader.SetVec("p2", -1, -1, depthMargin != 0f ? 1 : 0);
 		}
 
 		// Drifting cloud-shadow uniforms. Must be pushed EVERY world frame (the
@@ -319,26 +285,26 @@ namespace OpenRA.Graphics
 		// change, so this is invoked separately from Renderer.BeginWorld.
 		public void SetCloudShadowParams()
 		{
-			Shader.SetVec("CloudShadowAlpha", CloudShadowState.Alpha);
-			Shader.SetVec("CloudShadowScale", CloudShadowState.Scale);
-			Shader.SetVec("CloudShadowWind", CloudShadowState.WindX, CloudShadowState.WindY);
-			Shader.SetVec("CloudShadowTime", CloudShadowState.Time);
-			Shader.SetVec("CloudShadowCoverage", CloudShadowState.Coverage);
-			Shader.SetVec("CloudShadowEdge", CloudShadowState.Edge);
+			shader.SetVec("CloudShadowAlpha", CloudShadowState.Alpha);
+			shader.SetVec("CloudShadowScale", CloudShadowState.Scale);
+			shader.SetVec("CloudShadowWind", CloudShadowState.WindX, CloudShadowState.WindY);
+			shader.SetVec("CloudShadowTime", CloudShadowState.Time);
+			shader.SetVec("CloudShadowCoverage", CloudShadowState.Coverage);
+			shader.SetVec("CloudShadowEdge", CloudShadowState.Edge);
 		}
 
 		// Day/night world tint. Pushed every world frame (advances per tick),
 		// alongside the cloud-shadow params. Identity (1,1,1) = no-op.
 		public void SetWorldTintParams()
 		{
-			Shader.SetVec("WorldDayTintEnabled", 1f);
-			Shader.SetVec("WorldDayTint", WorldTintState.Red, WorldTintState.Green, WorldTintState.Blue);
+			shader.SetVec("WorldDayTintEnabled", 1f);
+			shader.SetVec("WorldDayTint", WorldTintState.Red, WorldTintState.Green, WorldTintState.Blue);
 		}
 
 		public void SetDepthPreview(bool enabled, float contrast, float offset)
 		{
-			Shader.SetBool("EnableDepthPreview", enabled);
-			Shader.SetVec("DepthPreviewParams", contrast, offset);
+			shader.SetBool("EnableDepthPreview", enabled);
+			shader.SetVec("DepthPreviewParams", contrast, offset);
 		}
 
 		// Glow extract pass toggle: when true, the combined shader keeps only
@@ -346,7 +312,7 @@ namespace OpenRA.Graphics
 		// Used by Renderer.RenderGlowBloom() to populate the glow FBO.
 		public void SetGlowExtractParams(bool extractOnly)
 		{
-			Shader.SetBool("GlowExtractOnly", extractOnly);
+			shader.SetBool("GlowExtractOnly", extractOnly);
 		}
 
 		// True if any bloom/full-bright sprite has been submitted since the last
@@ -360,7 +326,7 @@ namespace OpenRA.Graphics
 
 		public void EnablePixelArtScaling(bool enabled)
 		{
-			Shader.SetBool("EnablePixelArtScaling", enabled);
+			shader.SetBool("EnablePixelArtScaling", enabled);
 		}
 	}
 }

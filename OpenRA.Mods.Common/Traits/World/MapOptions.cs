@@ -40,9 +40,6 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Display order for the short game checkbox in the lobby.")]
 		public readonly int ShortGameCheckboxDisplayOrder = 0;
 
-		[Desc("Options category in which to display the short game checkbox in the lobby.")]
-		public readonly string ShortGameCheckboxCategory = null;
-
 		[FluentReference]
 		[Desc("Descriptive label for the tech level option in the lobby.")]
 		public readonly string TechLevelDropdownLabel = "dropdown-tech-level.label";
@@ -62,9 +59,6 @@ namespace OpenRA.Mods.Common.Traits
 
 		[Desc("Display order for the tech level option in the lobby.")]
 		public readonly int TechLevelDropdownDisplayOrder = 0;
-
-		[Desc("Options category in which to display the tech level option in the lobby.")]
-		public readonly string TechLevelDropdownCategory = null;
 
 		[FluentReference]
 		[Desc("Tooltip description for the game speed option in the lobby.")]
@@ -86,9 +80,6 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Display order for the game speed option in the lobby.")]
 		public readonly int GameSpeedDropdownDisplayOrder = 0;
 
-		[Desc("Options category in which to display the game speed option in the lobby.")]
-		public readonly string GameSpeedDropdownCategory = null;
-
 		[Desc("If defined, overrides the viewport height for all players to this many world units.")]
 		public readonly WDist? ViewportHeight = null;
 
@@ -96,8 +87,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			yield return new LobbyBooleanOption(map, "shortgame",
 				ShortGameCheckboxLabel, ShortGameCheckboxDescription,
-				ShortGameCheckboxVisible, ShortGameCheckboxDisplayOrder, ShortGameCheckboxEnabled, ShortGameCheckboxLocked,
-				ShortGameCheckboxCategory);
+				ShortGameCheckboxVisible, ShortGameCheckboxDisplayOrder, ShortGameCheckboxEnabled, ShortGameCheckboxLocked);
 
 			var techLevels = map.PlayerActorInfo.TraitInfos<ProvidesTechPrerequisiteInfo>()
 				.ToDictionary(t => t.Id, t => map.GetMessage(t.Name));
@@ -105,7 +95,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (techLevels.Count > 0)
 				yield return new LobbyOption(map, "techlevel",
 					TechLevelDropdownLabel, TechLevelDropdownDescription, TechLevelDropdownVisible, TechLevelDropdownDisplayOrder,
-					techLevels, TechLevel, TechLevelDropdownLocked, TechLevelDropdownCategory);
+					techLevels, TechLevel, TechLevelDropdownLocked);
 
 			var gameSpeeds = Game.ModData.GetOrCreate<GameSpeeds>();
 			var speeds = gameSpeeds.Speeds.ToDictionary(s => s.Key, s => FluentProvider.GetMessage(s.Value.Name));
@@ -114,7 +104,7 @@ namespace OpenRA.Mods.Common.Traits
 			yield return new LobbyOption(map, "gamespeed",
 				GameSpeedDropdownLabel, GameSpeedDropdownDescription,
 				GameSpeedDropdownVisible, GameSpeedDropdownDisplayOrder, speeds,
-				GameSpeed ?? gameSpeeds.DefaultSpeed, GameSpeedDropdownLocked, GameSpeedDropdownCategory);
+				GameSpeed ?? gameSpeeds.DefaultSpeed, GameSpeedDropdownLocked);
 		}
 
 		void IRulesetLoaded<ActorInfo>.RulesetLoaded(Ruleset rules, ActorInfo info)

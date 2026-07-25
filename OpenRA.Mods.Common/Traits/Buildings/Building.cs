@@ -32,7 +32,7 @@ namespace OpenRA.Mods.Common.Traits
 	public class BuildingInfo : TraitInfo, IOccupySpaceInfo, IPlaceBuildingDecorationInfo
 	{
 		[Desc("Where you are allowed to place the building (Water, Clear, ...)")]
-		public readonly FrozenSet<string> TerrainTypes = FrozenSet<string>.Empty;
+		public readonly FrozenSet<string> TerrainTypes = [];
 
 		[Desc("x means cell is blocked, capital X means blocked but not counting as targetable, ",
 			"= means part of the footprint but passable, _ means completely empty, ",
@@ -143,12 +143,6 @@ namespace OpenRA.Mods.Common.Traits
 				yield return t;
 		}
 
-		public IEnumerable<CPos> ConditionallyPassableTiles(CPos location)
-		{
-			foreach (var t in FootprintTiles(location, FootprintCellType.ConditionallyPassable))
-				yield return t;
-		}
-
 		public IEnumerable<CPos> PathableTiles(CPos location)
 		{
 			foreach (var t in FootprintTiles(location, FootprintCellType.Empty))
@@ -161,6 +155,12 @@ namespace OpenRA.Mods.Common.Traits
 		public IEnumerable<CPos> TransitOnlyTiles(CPos location)
 		{
 			foreach (var t in FootprintTiles(location, FootprintCellType.OccupiedPassableTransitOnly))
+				yield return t;
+		}
+
+		public IEnumerable<CPos> ConditionallyPassableTiles(CPos location)
+		{
+			foreach (var t in FootprintTiles(location, FootprintCellType.ConditionallyPassable))
 				yield return t;
 		}
 

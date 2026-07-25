@@ -65,12 +65,12 @@ namespace OpenRA.Graphics
 				tintModifiers |= TintModifiers.BloomGlow;
 			var alpha = CurrentSequence.GetAlpha(CurrentFrame);
 			var (image, rotation) = CurrentSequence.GetSpriteWithRotation(CurrentFrame, facingFunc());
-			var shadow = CurrentSequence.GetShadow(CurrentFrame, facingFunc());
 			var imageRenderable = new SpriteRenderable(
 				image, pos, offset, CurrentSequence.ZOffset + zOffset, palette,
 				CurrentSequence.Scale, alpha, float3.Ones, tintModifiers, IsDecoration, rotation,
 				bloomIntensity: CurrentSequence.BloomGlowIntensity);
 
+			var shadow = CurrentSequence.GetShadow(CurrentFrame, facingFunc());
 			if (shadow != null)
 			{
 				var height = map.DistanceAboveTerrain(pos).Length;
@@ -78,8 +78,7 @@ namespace OpenRA.Graphics
 				var shadowRenderable = new SpriteRenderable(
 					shadow, pos, offset - new WVec(0, 0, height), CurrentSequence.ShadowZOffset + zOffset + height, palette,
 					CurrentSequence.Scale, 1f, float3.Ones, tintModifiers,
-					true, rotation, bloomIntensity: CurrentSequence.BloomGlowIntensity).AsShadow();
-
+					true, rotation, bloomIntensity: CurrentSequence.BloomGlowIntensity);
 				return [shadowRenderable, imageRenderable];
 			}
 

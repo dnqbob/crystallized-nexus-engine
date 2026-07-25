@@ -1,6 +1,6 @@
 Metadata:
 	Title: mod-title
-	Version: cn-20260511
+	Version: {DEV_VERSION}
 	Website: https://www.openra.net
 	WebIcon32: https://www.openra.net/images/icons/cnc_32x32.png
 	WindowTitle: mod-windowtitle
@@ -39,7 +39,7 @@ FileSystem: ContentInstallerFileSystem
 
 MapFolders:
 	cnc|maps: System
-	~^SupportDir|maps/cnc/cn-20260511: User
+	~^SupportDir|maps/cnc/{DEV_VERSION}: User
 
 Rules:
 	cnc|rules/misc.yaml
@@ -148,6 +148,7 @@ ChromeLayout:
 
 FluentMessages:
 	common|fluent/common.ftl
+	common|fluent/ingame-debug.ftl
 	common|fluent/hotkeys.ftl
 	common|fluent/rules.ftl
 	cnc|fluent/cnc.ftl

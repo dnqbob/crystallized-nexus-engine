@@ -379,24 +379,36 @@ namespace OpenRA.Mods.Common.Traits
 
 		#region Local misc stuff
 
-		public CPos? GetAdjacentCell(CPos nextCell, Func<CPos, bool> preferToAvoid = null)
+		public CPos? GetAdjacentEnterableCell(CPos nextCell, Func<CPos, bool> preferToAvoid = null)
 		{
 			var availCells = new List<CPos>();
-			var notStupidCells = new List<CPos>();
 			foreach (var direction in CVec.Directions)
 			{
 				var p = ToCell + direction;
 				if (CanEnterCell(p) && CanStayInCell(p) && (preferToAvoid == null || !preferToAvoid(p)))
 					availCells.Add(p);
-				else if (p != nextCell && p != ToCell)
-					notStupidCells.Add(p);
 			}
 
 			CPos? newCell = null;
 			if (availCells.Count > 0)
 				newCell = availCells.Random(self.World.SharedRandom);
-			else
+
+			return newCell;
+		}
+
+		public CPos? GetAdjacentCell(CPos nextCell, Func<CPos, bool> preferToAvoid = null)
+		{
+			var newCell = GetAdjacentEnterableCell(nextCell, preferToAvoid);
+			if (newCell == null)
 			{
+				var notStupidCells = new List<CPos>();
+				foreach (var direction in CVec.Directions)
+				{
+					var p = ToCell + direction;
+					if (p != nextCell && p != ToCell)
+						notStupidCells.Add(p);
+				}
+
 				var cellInfo = notStupidCells
 					.SelectMany(c => self.World.ActorMap.GetActorsAt(c).Where(IsMovable),
 						(c, a) => new { Cell = c, Actor = a })
@@ -479,11 +491,7 @@ namespace OpenRA.Mods.Common.Traits
 				self.World.GetCustomMovementLayers()[cell.Layer].CenterOfCell(cell);
 
 			position += self.World.Map.Grid.OffsetOfSubCell(subCell);
-
-			// Custom movement layers provide their own world height. Only ground-layer cells
-			// need the ramp correction that projects the position back onto the terrain.
-			if (cell.Layer == 0)
-				position -= new WVec(0, 0, self.World.Map.DistanceAboveTerrain(position).Length);
+			position -= new WVec(0, 0, self.World.Map.DistanceAboveTerrain(position).Length);
 
 			SetCenterPosition(self, position);
 			FinishedMoving(self);

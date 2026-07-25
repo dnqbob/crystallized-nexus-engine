@@ -25,8 +25,7 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			this.type = type;
 			renderer = Game.Renderer;
-			var bindings = new RenderPostProcessPassShaderBindings(name);
-			shader = renderer.CreateShader(bindings);
+			shader = renderer.CreateShader(new RenderPostProcessPassShaderBindings(name));
 			var vertices = new RenderPostProcessPassVertex[]
 			{
 				new(-1, -1),
@@ -37,7 +36,7 @@ namespace OpenRA.Mods.Common.Traits
 				new(-1, -1)
 			};
 
-			buffer = renderer.CreateVertexBuffer(bindings, vertices, false);
+			buffer = renderer.CreateVertexBuffer(vertices, false);
 		}
 
 		PostProcessPassType IRenderPostProcessPass.Type => type;
@@ -56,7 +55,6 @@ namespace OpenRA.Mods.Common.Traits
 		void INotifyActorDisposing.Disposing(Actor self)
 		{
 			buffer.Dispose();
-			shader.Dispose();
 		}
 	}
 }

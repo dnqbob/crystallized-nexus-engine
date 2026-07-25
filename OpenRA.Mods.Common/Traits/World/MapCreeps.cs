@@ -38,13 +38,10 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Display order for the creeps checkbox in the lobby.")]
 		public readonly int CheckboxDisplayOrder = 0;
 
-		[Desc("Category for the creeps checkbox in the lobby.")]
-		public readonly string CheckboxCategory = null;
-
 		IEnumerable<LobbyOption> ILobbyOptions.LobbyOptions(MapPreview map)
 		{
 			yield return new LobbyBooleanOption(map, "creeps",
-				CheckboxLabel, CheckboxDescription, CheckboxVisible, CheckboxDisplayOrder, CheckboxEnabled, CheckboxLocked, CheckboxCategory);
+				CheckboxLabel, CheckboxDescription, CheckboxVisible, CheckboxDisplayOrder, CheckboxEnabled, CheckboxLocked);
 		}
 
 		public override object Create(ActorInitializer init) { return new MapCreeps(this); }

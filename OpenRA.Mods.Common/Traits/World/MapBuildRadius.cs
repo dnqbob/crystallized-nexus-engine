@@ -38,9 +38,6 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Display order for the ally build radius checkbox in the lobby.")]
 		public readonly int AllyBuildRadiusCheckboxDisplayOrder = 0;
 
-		[Desc("Options category in which to display the ally build radius checkbox in the lobby.")]
-		public readonly string AllyBuildRadiusCheckboxCategory = null;
-
 		[FluentReference]
 		[Desc("Tooltip description for the build radius checkbox in the lobby.")]
 		public readonly string BuildRadiusCheckboxLabel = "checkbox-build-radius.label";
@@ -61,18 +58,13 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Display order for the build radius checkbox in the lobby.")]
 		public readonly int BuildRadiusCheckboxDisplayOrder = 0;
 
-		[Desc("Options category in which to display the build radius checkbox in the lobby.")]
-		public readonly string BuildRadiusCheckboxCategory = null;
-
 		IEnumerable<LobbyOption> ILobbyOptions.LobbyOptions(MapPreview map)
 		{
 			yield return new LobbyBooleanOption(map, "allybuild", AllyBuildRadiusCheckboxLabel, AllyBuildRadiusCheckboxDescription,
-				AllyBuildRadiusCheckboxVisible, AllyBuildRadiusCheckboxDisplayOrder, AllyBuildRadiusCheckboxEnabled,
-				AllyBuildRadiusCheckboxLocked, AllyBuildRadiusCheckboxCategory);
+				AllyBuildRadiusCheckboxVisible, AllyBuildRadiusCheckboxDisplayOrder, AllyBuildRadiusCheckboxEnabled, AllyBuildRadiusCheckboxLocked);
 
 			yield return new LobbyBooleanOption(map, "buildradius", BuildRadiusCheckboxLabel, BuildRadiusCheckboxDescription,
-				BuildRadiusCheckboxVisible, BuildRadiusCheckboxDisplayOrder, BuildRadiusCheckboxEnabled,
-				BuildRadiusCheckboxLocked, BuildRadiusCheckboxCategory);
+				BuildRadiusCheckboxVisible, BuildRadiusCheckboxDisplayOrder, BuildRadiusCheckboxEnabled, BuildRadiusCheckboxLocked);
 		}
 
 		public override object Create(ActorInitializer init) { return new MapBuildRadius(this); }

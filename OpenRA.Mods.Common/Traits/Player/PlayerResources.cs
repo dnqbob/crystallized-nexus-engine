@@ -43,9 +43,6 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Display order for the DefaultCash option.")]
 		public readonly int DefaultCashDropdownDisplayOrder = 0;
 
-		[Desc("Category for the DefaultCash option in the lobby.")]
-		public readonly string DefaultCashDropdownCategory = null;
-
 		[NotificationReference("Speech")]
 		[Desc("Speech notification to play when the player does not have any funds.")]
 		public readonly string InsufficientFundsNotification = null;
@@ -75,7 +72,7 @@ namespace OpenRA.Mods.Common.Traits
 			if (startingCash.Count > 0)
 				yield return new LobbyOption(map, "startingcash",
 					DefaultCashDropdownLabel, DefaultCashDropdownDescription, DefaultCashDropdownVisible, DefaultCashDropdownDisplayOrder,
-					startingCash, DefaultCash.ToStringInvariant(), DefaultCashDropdownLocked, DefaultCashDropdownCategory);
+					startingCash, DefaultCash.ToStringInvariant(), DefaultCashDropdownLocked);
 		}
 
 		public override object Create(ActorInitializer init) { return new PlayerResources(init.Self, this); }

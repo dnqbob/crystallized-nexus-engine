@@ -624,7 +624,6 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 			}
 
 			var viewportSizes = Game.ModData.GetOrCreate<WorldViewportSizes>();
-
 			// Use physical pixels (SurfaceSize) so UI scale option is available also for users using OS DPI Scale != 100%
 			var maxScales = new float2(Game.Renderer.SurfaceSize) / new float2(viewportSizes.MinEffectiveResolution);
 			var maxScale = Math.Min(maxScales.X, maxScales.Y);

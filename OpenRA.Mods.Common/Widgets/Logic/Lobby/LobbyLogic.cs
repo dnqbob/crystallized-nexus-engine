@@ -810,7 +810,18 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 					LobbyUtils.SetupEditableColorWidget(template, slot, client, orderManager, worldRenderer, colorManager);
 					LobbyUtils.SetupEditableFactionWidget(template, slot, client, orderManager, factions);
 					LobbyUtils.SetupEditableTeamWidget(template, slot, client, orderManager, map);
+
+					// Handicaps are a bot-balancing tool, not something human players should be able to hand themselves.
+					// TEMPLATE_EDITABLE_PLAYER only has a HANDICAP_DROPDOWN (no plain HANDICAP label to fall back to),
+					// so show it for humans too, just non-interactive.
 					LobbyUtils.SetupEditableHandicapWidget(template, slot, client, orderManager);
+					if (client.Bot == null)
+					{
+						var handicapDropdown = template.Get<DropDownButtonWidget>("HANDICAP_DROPDOWN");
+						handicapDropdown.IsDisabled = () => true;
+						handicapDropdown.OnMouseDown = _ => { };
+					}
+
 					LobbyUtils.SetupEditableSpawnWidget(template, slot, client, orderManager, map);
 					LobbyUtils.SetupEditableReadyWidget(template, client, orderManager, map, MapIsPlayable);
 				}
@@ -827,7 +838,9 @@ namespace OpenRA.Mods.Common.Widgets.Logic
 					if (isHost)
 					{
 						LobbyUtils.SetupEditableTeamWidget(template, slot, client, orderManager, map);
-						LobbyUtils.SetupEditableHandicapWidget(template, slot, client, orderManager);
+
+						// Reached only for other players' (non-bot) slots - see the branch above.
+						LobbyUtils.SetupHandicapWidget(template, client);
 						LobbyUtils.SetupEditableSpawnWidget(template, slot, client, orderManager, map);
 						LobbyUtils.SetupPlayerActionWidget(template, client, orderManager, worldRenderer,
 							lobby, () => panel = PanelType.Kick, () => panel = PanelType.Players);
