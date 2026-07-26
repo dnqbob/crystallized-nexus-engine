@@ -10,6 +10,7 @@
 #endregion
 
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using OpenRA.GameRules;
 using OpenRA.Graphics;
 using OpenRA.Mods.Common.Graphics;
@@ -96,6 +97,50 @@ namespace OpenRA.Mods.Common.Projectiles
 		[PaletteReference]
 		public readonly string HitAnimPalette = "effect";
 
+		[Desc("Maximum screenspace distortion in pixels applied along the beam. 0 disables the refraction effect.")]
+		public readonly float Distortion = 0f;
+
+		[Desc("Width of the distortion effect. 0 uses BeamWidth.")]
+		public readonly WDist DistortionWidth = WDist.Zero;
+
+		[Desc("Spatial frequency of the distortion wave along the beam.")]
+		public readonly float DistortionWaveScale = 28f;
+
+		[Desc("Animation speed of the distortion wave.")]
+		public readonly float DistortionWaveSpeed = 0.18f;
+
+		[Desc("Fraction of the distortion width used to fade out the beam edges.")]
+		public readonly float DistortionEdgeSoftness = 0.45f;
+
+		[Desc("Break the beam apart into drifting, fading particles once it finishes instead of just cutting off.")]
+		public readonly bool TrailParticles = false;
+
+		[Desc("Number of particles the trail dissolves into.")]
+		public readonly int TrailParticleCount = 24;
+
+		[Desc("Ticks each trail particle drifts and fades for after the beam ends.")]
+		public readonly int TrailParticleLifetime = 20;
+
+		[Desc("Outward drift speed range of trail particles (WDist per tick), low to high.")]
+		public readonly ImmutableArray<WDist> TrailParticleSpeed = [new(20), new(80)];
+
+		[Desc("Drawn length of each trail particle.")]
+		public readonly WDist TrailParticleLength = new(64);
+
+		[Desc("Drawn width of each trail particle.")]
+		public readonly WDist TrailParticleWidth = new(24);
+
+		[Desc("Trail particle color at the start of its life.")]
+		public readonly Color TrailParticleStartColor = Color.FromArgb(200, 255, 255, 255);
+
+		[Desc("Trail particle color at the end of its life (usually alpha 0 to fade out).")]
+		public readonly Color TrailParticleEndColor = Color.FromArgb(0, 255, 255, 255);
+
+		[Desc("Per-particle bloom-source multiplier (only effective while BloomGlowEffects is active).",
+			"Default 1 = same strength as the global bloom; higher values make the particles push harder",
+			"into the glow buffer for a more visible glow.")]
+		public readonly float TrailParticleBloomIntensity = 3f;
+
 		public IProjectile Create(ProjectileArgs args)
 		{
 			var bc = BeamPlayerColor ? Color.FromArgb(BeamColor.A, args.SourceActor.OwnerColor()) : BeamColor;
@@ -106,14 +151,25 @@ namespace OpenRA.Mods.Common.Projectiles
 
 	public class Railgun : IProjectile, ISync
 	{
+		struct TrailParticle
+		{
+			public WPos Pos;
+			public WVec Velocity;
+		}
+
 		readonly ProjectileArgs args;
 		readonly RailgunInfo info;
 		readonly Animation hitanim;
+		readonly AreaBeamDistortionRenderer distortionRenderer;
 		public readonly Color BeamColor;
 		public readonly Color HelixColor;
 
 		int ticks;
 		bool animationComplete;
+
+		TrailParticle[] trailParticles;
+		bool trailSpawned;
+		int trailTicks;
 
 		[VerifySync]
 		WPos target;
@@ -144,6 +200,9 @@ namespace OpenRA.Mods.Common.Projectiles
 
 			if (!string.IsNullOrEmpty(info.HitAnim))
 				hitanim = new Animation(args.SourceActor.World, info.HitAnim);
+
+			if (info.Distortion > 0f)
+				distortionRenderer = args.SourceActor.World.WorldActor.TraitOrDefault<AreaBeamDistortionRenderer>();
 
 			CalculateVectors();
 		}
@@ -232,8 +291,49 @@ namespace OpenRA.Mods.Common.Projectiles
 
 			hitanim?.Tick();
 
-			if (ticks++ > info.Duration && animationComplete)
+			if (info.TrailParticles)
+			{
+				if (ticks == info.Duration && !trailSpawned)
+					SpawnTrailParticles(world);
+
+				if (trailSpawned)
+					TickTrailParticles();
+			}
+
+			var trailFinished = !info.TrailParticles || trailTicks >= info.TrailParticleLifetime;
+
+			if (ticks++ > info.Duration && animationComplete && trailFinished)
 				world.AddFrameEndTask(w => w.Remove(this));
+		}
+
+		void SpawnTrailParticles(World world)
+		{
+			trailSpawned = true;
+			trailParticles = new TrailParticle[info.TrailParticleCount];
+
+			for (var i = 0; i < trailParticles.Length; i++)
+			{
+				var t = trailParticles.Length > 1 ? i * 1024 / (trailParticles.Length - 1) : 0;
+				var pos = args.Source + SourceToTarget * t / 1024;
+
+				var angle = new WAngle(world.SharedRandom.Next(1024));
+				var direction = (LeftVector * angle.Cos() + UpVector * angle.Sin()) / 1024;
+				var speed = Util.RandomDistance(world.SharedRandom, info.TrailParticleSpeed);
+
+				trailParticles[i] = new TrailParticle
+				{
+					Pos = pos,
+					Velocity = direction * speed.Length / 1024,
+				};
+			}
+		}
+
+		void TickTrailParticles()
+		{
+			for (var i = 0; i < trailParticles.Length; i++)
+				trailParticles[i].Pos += trailParticles[i].Velocity;
+
+			trailTicks++;
 		}
 
 		public IEnumerable<IRenderable> Render(WorldRenderer wr)
@@ -245,8 +345,35 @@ namespace OpenRA.Mods.Common.Projectiles
 			if (ticks < info.Duration)
 			{
 				yield return new RailgunHelixRenderable(args.Source, info.ZOffset, this, info, ticks);
-				yield return new BeamRenderable(args.Source, info.ZOffset, SourceToTarget, info.BeamShape, info.BeamWidth,
-					Color.FromArgb(BeamColor.A + info.BeamAlphaDeltaPerTick * ticks, BeamColor));
+
+				var beamAlpha = (BeamColor.A + info.BeamAlphaDeltaPerTick * ticks).Clamp(0, 255);
+				var beamColor = Color.FromArgb(beamAlpha, BeamColor);
+				if (distortionRenderer != null)
+				{
+					var distortionWidth = info.DistortionWidth.Length > 0 ? info.DistortionWidth : info.BeamWidth;
+					yield return new AreaBeamDistortionRenderable(distortionRenderer, args.Source, info.ZOffset, SourceToTarget,
+						distortionWidth, info.BeamShape, info.BeamWidth, beamColor, 0f, info.Distortion,
+						info.DistortionWaveScale, info.DistortionWaveSpeed, info.DistortionEdgeSoftness);
+				}
+				else
+					yield return new BeamRenderable(args.Source, info.ZOffset, SourceToTarget, info.BeamShape, info.BeamWidth, beamColor);
+			}
+
+			if (trailSpawned)
+			{
+				var fade = info.TrailParticleLifetime > 0 ? trailTicks * 1f / info.TrailParticleLifetime : 1f;
+				var color = Exts.ColorLerp(System.Math.Clamp(fade, 0f, 1f), info.TrailParticleStartColor, info.TrailParticleEndColor);
+				if (color.A > 0)
+				{
+					foreach (var particle in trailParticles)
+					{
+						var dir = particle.Velocity.LengthSquared > 0
+							? info.TrailParticleLength.Length * particle.Velocity / particle.Velocity.Length
+							: WVec.Zero;
+						yield return new BeamRenderable(particle.Pos, info.ZOffset, dir, info.BeamShape, info.TrailParticleWidth, color,
+							0f, info.TrailParticleBloomIntensity);
+					}
+				}
 			}
 
 			if (hitanim != null)
