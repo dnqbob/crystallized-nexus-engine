@@ -48,6 +48,9 @@ namespace OpenRA.Mods.Common.Traits
 		[PaletteReference]
 		public readonly string MuzzlePalette = "effect";
 
+		[Desc("Ticks between each garrisoned unit's first shot in a new engagement, staggering their volleys instead of firing in sync.")]
+		public readonly int StaggerDelay = 8;
+
 		public override object Create(ActorInitializer init) { return new AttackGarrisoned(init.Self, this); }
 		public override void RulesetLoaded(Ruleset rules, ActorInfo ai)
 		{
@@ -88,6 +91,10 @@ namespace OpenRA.Mods.Common.Traits
 		readonly Dictionary<Actor, IFacing> paxFacing;
 		readonly Dictionary<Actor, IPositionable> paxPos;
 		readonly Dictionary<Actor, RenderSprites> paxRender;
+
+		int ticks;
+		Target lastAttackTarget = Target.Invalid;
+		int engagementStartTick;
 
 		public AttackGarrisoned(Actor self, AttackGarrisonedInfo info)
 			: base(self, info)
@@ -172,18 +179,30 @@ namespace OpenRA.Mods.Common.Traits
 			if (!CanAttack(self, target))
 				return;
 
+			// Restart the stagger sequence whenever a new engagement begins, so ports don't
+			// keep firing in lockstep on every retarget.
+			if (target != lastAttackTarget)
+			{
+				lastAttackTarget = target;
+				engagementStartTick = ticks;
+			}
+
 			var pos = self.CenterPosition;
 			var targetedPosition = GetTargetPosition(pos, target);
 			var targetYaw = (targetedPosition - pos).Yaw;
 
-			foreach (var a in Armaments)
+			for (var i = 0; i < armaments.Count; i++)
 			{
+				var a = armaments[i];
 				if (a.IsTraitDisabled)
+					continue;
+
+				if (ticks < engagementStartTick + i * Info.StaggerDelay)
 					continue;
 
 				var port = SelectFirePort(self, targetYaw);
 				if (port == null)
-					return;
+					continue;
 
 				paxFacing[a.Actor].Facing = targetYaw;
 				paxPos[a.Actor].SetCenterPosition(a.Actor, pos + PortOffset(self, port));
@@ -226,6 +245,7 @@ namespace OpenRA.Mods.Common.Traits
 		protected override void Tick(Actor self)
 		{
 			base.Tick(self);
+			ticks++;
 
 			// Take a copy so that Tick() can remove animations
 			foreach (var m in muzzles.ToArray())
