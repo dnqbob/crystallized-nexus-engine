@@ -491,7 +491,12 @@ namespace OpenRA.Mods.Common.Traits
 				self.World.GetCustomMovementLayers()[cell.Layer].CenterOfCell(cell);
 
 			position += self.World.Map.Grid.OffsetOfSubCell(subCell);
-			position -= new WVec(0, 0, self.World.Map.DistanceAboveTerrain(position).Length);
+
+			// Apply ramp offset to ground units only - custom movement layers (e.g. Jumpjet)
+			// already return the correct absolute altitude from their own CenterOfCell, and
+			// re-subtracting DistanceAboveTerrain here would flatten it back to ground level.
+			if (cell.Layer == 0)
+				position -= new WVec(0, 0, self.World.Map.DistanceAboveTerrain(position).Length);
 
 			SetCenterPosition(self, position);
 			FinishedMoving(self);
