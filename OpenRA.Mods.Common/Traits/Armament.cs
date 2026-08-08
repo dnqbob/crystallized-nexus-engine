@@ -81,7 +81,6 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Casing target position will be modified to ground level.")]
 		public readonly bool CasingHitGroundLevel = true;
 
-
 		public WeaponInfo WeaponInfo { get; private set; }
 		public WeaponInfo CasingWeaponInfo { get; private set; }
 		public WDist ModifiedRange { get; private set; }
@@ -371,18 +370,19 @@ namespace OpenRA.Mods.Common.Traits
 			ProjectileArgs argsCasing = null;
 			if (CasingWeapon != null)
 			{
-				Func<WPos> casingSpawnPosition = () => self.CenterPosition + CasingSpawnOffset(self, barrel);
+				WPos CasingSpawnPosition() => self.CenterPosition + CasingSpawnOffset(self, barrel);
 
 				var casingHitPosition = self.CenterPosition + CasingHitOffset(self, barrel);
-				casingHitPosition = Info.CasingHitGroundLevel ? casingHitPosition - new WVec(0, 0, self.World.Map.DistanceAboveTerrain(casingHitPosition).Length) : casingHitPosition;
+				if (Info.CasingHitGroundLevel)
+					casingHitPosition -= new WVec(0, 0, self.World.Map.DistanceAboveTerrain(casingHitPosition).Length);
 
-				Func<WAngle> casingFireFacing = () => (casingHitPosition - casingSpawnPosition()).Yaw;
+				WAngle CasingFireFacing() => (casingHitPosition - CasingSpawnPosition()).Yaw;
 
 				argsCasing = new ProjectileArgs
 				{
 					Weapon = CasingWeapon,
-					Facing = casingFireFacing(),
-					CurrentMuzzleFacing = casingFireFacing,
+					Facing = CasingFireFacing(),
+					CurrentMuzzleFacing = CasingFireFacing,
 
 					DamageModifiers = damageModifiers.ToArray(),
 
@@ -390,8 +390,8 @@ namespace OpenRA.Mods.Common.Traits
 
 					RangeModifiers = rangeModifiers.ToArray(),
 
-					Source = casingSpawnPosition(),
-					CurrentSource = casingSpawnPosition,
+					Source = CasingSpawnPosition(),
+					CurrentSource = CasingSpawnPosition,
 					SourceActor = self,
 					PassiveTarget = casingHitPosition
 				};
@@ -415,7 +415,6 @@ namespace OpenRA.Mods.Common.Traits
 
 					Recoil = Info.Recoil;
 				}
-
 
 				if (argsCasing != null)
 				{
@@ -479,6 +478,13 @@ namespace OpenRA.Mods.Common.Traits
 		{
 			// Weapon offset in turret coordinates
 			var effectOffset = offset + new WVec(-Recoil, WDist.Zero, WDist.Zero);
+
+			// Follow the visual bob, so a hovering unit does not fire from where it would be standing.
+			// This lived in CalculateMuzzleOffset before that method was generalised into this one; it
+			// belongs here rather than at the muzzle alone, since ejected casings leave the same
+			// hovering unit.
+			if (hovers != null)
+				effectOffset += hovers.WorldVisualOffset;
 
 			// Turret coordinates to body coordinates
 			var bodyOrientation = coords.QuantizeOrientation(self.Orientation);
