@@ -23,6 +23,8 @@ namespace OpenRA.Mods.Common.Traits
 	{
 		public WVec Offset;
 		public WAngle Yaw;
+		public WVec CasingOffset;
+		public WVec CasingTargetOffset;
 	}
 
 	[Desc("Allows you to attach weapons to the unit (use @IdentifierSuffix for > 1)")]
@@ -66,7 +68,21 @@ namespace OpenRA.Mods.Common.Traits
 		[Desc("Condition to grant while reloading.")]
 		public readonly string ReloadingCondition = null;
 
+		[WeaponReference]
+		[Desc("Has to be defined in weapons.yaml as well.")]
+		public readonly string CasingWeapon = null;
+
+		[Desc("Casing spawn position relative to turret or body, (forward, right, up) triples.")]
+		public readonly ImmutableArray<WVec> CasingSpawnLocalOffset = [];
+
+		[Desc("Casing target position relative to turret or body, (forward, right, up) triples.")]
+		public readonly ImmutableArray<WVec> CasingTargetOffset = [];
+
+		[Desc("Casing target position will be modified to ground level.")]
+		public readonly bool CasingHitGroundLevel = true;
+
 		public WeaponInfo WeaponInfo { get; private set; }
+		public WeaponInfo CasingWeaponInfo { get; private set; }
 		public WDist ModifiedRange { get; private set; }
 
 		public readonly PlayerRelationship TargetRelationships = PlayerRelationship.Enemy;
@@ -106,6 +122,15 @@ namespace OpenRA.Mods.Common.Traits
 			if (WeaponInfo.ReloadDelay <= 0)
 				throw new YamlException($"Weapon '{weaponToLower}' ReloadDelay value must not be equal to or lower than 0");
 
+			if (CasingWeapon != null)
+			{
+				var casingweaponToLower = CasingWeapon.ToLowerInvariant();
+				if (!rules.Weapons.TryGetValue(casingweaponToLower, out var casingweaponInfo))
+					throw new YamlException($"Weapons Ruleset does not contain an entry '{casingweaponToLower}'");
+
+				CasingWeaponInfo = casingweaponInfo;
+			}
+
 			base.RulesetLoaded(rules, ai);
 		}
 	}
@@ -113,6 +138,7 @@ namespace OpenRA.Mods.Common.Traits
 	public class Armament : PausableConditionalTrait<ArmamentInfo>, ITick
 	{
 		public readonly WeaponInfo Weapon;
+		public readonly WeaponInfo CasingWeapon;
 		public readonly Barrel[] Barrels;
 		Turreted turret;
 		Hovers hovers;
@@ -144,6 +170,7 @@ namespace OpenRA.Mods.Common.Traits
 			Actor = self;
 
 			Weapon = info.WeaponInfo;
+			CasingWeapon = info.CasingWeaponInfo;
 			Burst = Weapon.Burst;
 
 			var barrels = new List<Barrel>();
@@ -152,12 +179,14 @@ namespace OpenRA.Mods.Common.Traits
 				barrels.Add(new Barrel
 				{
 					Offset = info.LocalOffset[i],
-					Yaw = info.LocalYaw.Length > i ? info.LocalYaw[i] : WAngle.Zero
+					Yaw = info.LocalYaw.Length > i ? info.LocalYaw[i] : WAngle.Zero,
+					CasingOffset = info.CasingSpawnLocalOffset.Length > i ? info.CasingSpawnLocalOffset[i] : WVec.Zero,
+					CasingTargetOffset = info.CasingTargetOffset.Length > i ? info.CasingTargetOffset[i] : WVec.Zero
 				});
 			}
 
 			if (barrels.Count == 0)
-				barrels.Add(new Barrel { Offset = WVec.Zero, Yaw = WAngle.Zero });
+				barrels.Add(new Barrel { Offset = WVec.Zero, Yaw = WAngle.Zero, CasingOffset = WVec.Zero, CasingTargetOffset = WVec.Zero });
 
 			barrelCount = barrels.Count;
 
@@ -338,6 +367,36 @@ namespace OpenRA.Mods.Common.Traits
 				GuidedTarget = target
 			};
 
+			ProjectileArgs argsCasing = null;
+			if (CasingWeapon != null)
+			{
+				WPos CasingSpawnPosition() => self.CenterPosition + CasingSpawnOffset(self, barrel);
+
+				var casingHitPosition = self.CenterPosition + CasingHitOffset(self, barrel);
+				if (Info.CasingHitGroundLevel)
+					casingHitPosition -= new WVec(0, 0, self.World.Map.DistanceAboveTerrain(casingHitPosition).Length);
+
+				WAngle CasingFireFacing() => (casingHitPosition - CasingSpawnPosition()).Yaw;
+
+				argsCasing = new ProjectileArgs
+				{
+					Weapon = CasingWeapon,
+					Facing = CasingFireFacing(),
+					CurrentMuzzleFacing = CasingFireFacing,
+
+					DamageModifiers = damageModifiers.ToArray(),
+
+					InaccuracyModifiers = inaccuracyModifiers.ToArray(),
+
+					RangeModifiers = rangeModifiers.ToArray(),
+
+					Source = CasingSpawnPosition(),
+					CurrentSource = CasingSpawnPosition,
+					SourceActor = self,
+					PassiveTarget = casingHitPosition
+				};
+			}
+
 			// Lambdas can't use 'in' variables, so capture a copy for later
 			var delayedTarget = target;
 			ScheduleDelayedAction(Info.FireDelay, Burst, (burst) =>
@@ -355,6 +414,13 @@ namespace OpenRA.Mods.Common.Traits
 						Game.Sound.Play(SoundType.World, args.Weapon.StartBurstReport, self.World, self.CenterPosition);
 
 					Recoil = Info.Recoil;
+				}
+
+				if (argsCasing != null)
+				{
+					var projectileCasing = argsCasing.Weapon.Projectile.Create(argsCasing);
+					if (projectileCasing != null)
+						self.World.Add(projectileCasing);
 				}
 
 				foreach (var (notifyActor, notify) in notifyAttacks)
@@ -395,26 +461,40 @@ namespace OpenRA.Mods.Common.Traits
 
 		public WVec MuzzleOffset(Actor self, Barrel b)
 		{
-			return CalculateMuzzleOffset(self, b);
+			return CalculateFireEffectOffset(self, b.Offset);
 		}
 
-		protected virtual WVec CalculateMuzzleOffset(Actor self, Barrel b)
+		public WVec CasingSpawnOffset(Actor self, Barrel b)
+		{
+			return CalculateFireEffectOffset(self, b.CasingOffset);
+		}
+
+		public WVec CasingHitOffset(Actor self, Barrel b)
+		{
+			return CalculateFireEffectOffset(self, b.CasingTargetOffset);
+		}
+
+		protected virtual WVec CalculateFireEffectOffset(Actor self, WVec offset)
 		{
 			// Weapon offset in turret coordinates
-			var localOffset = b.Offset + new WVec(-Recoil, WDist.Zero, WDist.Zero);
+			var effectOffset = offset + new WVec(-Recoil, WDist.Zero, WDist.Zero);
 
+			// Follow the visual bob, so a hovering unit does not fire from where it would be standing.
+			// This lived in CalculateMuzzleOffset before that method was generalised into this one; it
+			// belongs here rather than at the muzzle alone, since ejected casings leave the same
+			// hovering unit.
 			if (hovers != null)
-				localOffset += hovers.WorldVisualOffset;
+				effectOffset += hovers.WorldVisualOffset;
 
 			// Turret coordinates to body coordinates
 			var bodyOrientation = coords.QuantizeOrientation(self.Orientation);
 			if (turret != null)
-				localOffset = localOffset.Rotate(turret.WorldOrientation) + turret.Offset.Rotate(bodyOrientation);
+				effectOffset = effectOffset.Rotate(turret.WorldOrientation) + turret.Offset.Rotate(bodyOrientation);
 			else
-				localOffset = localOffset.Rotate(bodyOrientation);
+				effectOffset = effectOffset.Rotate(bodyOrientation);
 
 			// Body coordinates to world coordinates
-			return coords.LocalToWorld(localOffset);
+			return coords.LocalToWorld(effectOffset);
 		}
 
 		public WRot MuzzleOrientation(Actor self, Barrel b)
