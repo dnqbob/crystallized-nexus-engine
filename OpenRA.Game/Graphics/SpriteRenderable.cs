@@ -116,6 +116,14 @@ namespace OpenRA.Graphics
 				IsDecoration, rotation, true, fullBrightPaletteRanges, IsShadow, bloomIntensity);
 		}
 
+		// The position offset is folded in here rather than left to a chained OffsetBy so that callers
+		// rotating every frame (e.g. wind sway on foliage) only pay for a single allocation.
+		public SpriteRenderable WithRotation(WAngle newRotation, in WVec posOffset = default)
+		{
+			return new SpriteRenderable(sprite, pos + posOffset, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers,
+				IsDecoration, newRotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity);
+		}
+
 		public SpriteRenderable WithFullBrightOnly(uint paletteRanges, float bloomIntensity = 1f)
 		{
 			// Fold the per-sequence bloom multiplier (carried on this renderable) into the
