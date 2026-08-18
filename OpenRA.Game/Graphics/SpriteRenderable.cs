@@ -9,6 +9,7 @@
  */
 #endregion
 
+using System;
 using System.Collections.Generic;
 using OpenRA.Primitives;
 
@@ -25,10 +26,11 @@ namespace OpenRA.Graphics
 		readonly bool flipY;
 		readonly uint fullBrightPaletteRanges;
 		readonly float bloomIntensity;
+		readonly float rotationPivot;
 
 		public SpriteRenderable(Sprite sprite, WPos pos, WVec offset, int zOffset, PaletteReference palette, float scale, float alpha,
 			float3 tint, TintModifiers tintModifiers, bool isDecoration, WAngle rotation, bool flipY = false, uint fullBrightPaletteRanges = 0,
-			bool isShadow = false, float bloomIntensity = 1f)
+			bool isShadow = false, float bloomIntensity = 1f, float rotationPivot = 0f)
 		{
 			this.sprite = sprite;
 			this.pos = pos;
@@ -40,6 +42,7 @@ namespace OpenRA.Graphics
 			this.flipY = flipY;
 			this.fullBrightPaletteRanges = fullBrightPaletteRanges;
 			this.bloomIntensity = bloomIntensity;
+			this.rotationPivot = rotationPivot;
 			Tint = tint;
 			IsDecoration = isDecoration;
 			IsShadow = isShadow;
@@ -71,49 +74,57 @@ namespace OpenRA.Graphics
 		public IPalettedRenderable WithPalette(PaletteReference newPalette)
 		{
 			return new SpriteRenderable(sprite, pos, Offset, ZOffset, newPalette, scale, Alpha, Tint, TintModifiers,
-				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity);
+				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity, rotationPivot);
 		}
 
 		public IRenderable WithZOffset(int newOffset)
 		{
 			return new SpriteRenderable(sprite, pos, Offset, newOffset, Palette, scale, Alpha, Tint, TintModifiers,
-				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity);
+				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity, rotationPivot);
 		}
 
 		public IRenderable OffsetBy(in WVec vec)
 		{
 			return new SpriteRenderable(sprite, pos + vec, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers,
-				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity);
+				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity, rotationPivot);
 		}
 
 		public IRenderable AsDecoration()
 		{
 			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers,
-				true, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity);
+				true, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity, rotationPivot);
 		}
 
 		public IRenderable AsShadow()
 		{
 			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers,
-				IsDecoration, rotation, flipY, fullBrightPaletteRanges, true, bloomIntensity);
+				IsDecoration, rotation, flipY, fullBrightPaletteRanges, true, bloomIntensity, rotationPivot);
 		}
 
 		public IModifyableRenderable WithAlpha(float newAlpha)
 		{
 			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, newAlpha, Tint, TintModifiers,
-				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity);
+				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity, rotationPivot);
 		}
 
 		public IModifyableRenderable WithTint(in float3 newTint, TintModifiers newTintModifiers)
 		{
 			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, newTint, newTintModifiers,
-				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity);
+				IsDecoration, rotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity, rotationPivot);
 		}
 
 		public SpriteRenderable WithYFlip()
 		{
 			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers,
-				IsDecoration, rotation, true, fullBrightPaletteRanges, IsShadow, bloomIntensity);
+				IsDecoration, rotation, true, fullBrightPaletteRanges, IsShadow, bloomIntensity, rotationPivot);
+		}
+
+		// pivot is the distance in screen pixels from the sprite centre down to the point that should stay
+		// planted as the sprite tilts, e.g. the base of a tree trunk. Zero rotates around the centre.
+		public SpriteRenderable WithRotation(WAngle newRotation, float pivot = 0f)
+		{
+			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint, TintModifiers,
+				IsDecoration, newRotation, flipY, fullBrightPaletteRanges, IsShadow, bloomIntensity, pivot);
 		}
 
 		public SpriteRenderable WithFullBrightOnly(uint paletteRanges, float bloomIntensity = 1f)
@@ -122,13 +133,24 @@ namespace OpenRA.Graphics
 			// per-actor one passed by the caller so a single sequence can be dimmed even when
 			// the glow comes from the full-bright palette path rather than the BloomGlow flag.
 			return new SpriteRenderable(sprite, pos, Offset, ZOffset, Palette, scale, Alpha, Tint,
-				TintModifiers | TintModifiers.IgnoreWorldTint, IsDecoration, rotation, flipY, paletteRanges, IsShadow, this.bloomIntensity * bloomIntensity);
+				TintModifiers | TintModifiers.IgnoreWorldTint, IsDecoration, rotation, flipY, paletteRanges, IsShadow, this.bloomIntensity * bloomIntensity,
+				rotationPivot);
 		}
 
 		float3 ScreenPosition(WorldRenderer wr)
 		{
 			var s = 0.5f * scale * sprite.Size;
-			return wr.Screen3DPxPosition(pos) + wr.ScreenPxOffset(Offset) - new float3((int)s.X, (int)s.Y, s.Z);
+			var p = wr.Screen3DPxPosition(pos) + wr.ScreenPxOffset(Offset) - new float3((int)s.X, (int)s.Y, s.Z);
+
+			// The quad is rotated about the sprite centre, which drags a point rotationPivot below that
+			// centre sideways by rotationPivot * sin(rotation). Undo that here so the point stays planted.
+			// This has to happen in screen space: Screen3DPxPosition snaps pos to whole pixels, so routing
+			// the correction through a world-space offset would round it away and the sprite would jump a
+			// full pixel at a time instead of tilting smoothly.
+			if (rotationPivot != 0f && rotation != WAngle.Zero)
+				p -= new float3(rotationPivot * (float)Math.Sin(rotation.RendererRadians()), 0, 0);
+
+			return p;
 		}
 
 		public IFinalizedRenderable PrepareRender(WorldRenderer wr) { return this; }

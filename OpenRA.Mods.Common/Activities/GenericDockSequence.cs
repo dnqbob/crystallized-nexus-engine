@@ -63,22 +63,8 @@ namespace OpenRA.Mods.Common.Activities
 			QueueChild(new Wait(dockWait));
 		}
 
-		DockingState lastLoggedState = (DockingState)(-1);
-
-		void LogStateChange(Actor self)
-		{
-			if (dockingState == lastLoggedState)
-				return;
-
-			lastLoggedState = dockingState;
-			Log.Write("debug", $"[DockDebug] {self.Info.Name}: state={dockingState}, " +
-				$"hostDead={DockHostActor?.IsDead}, hostInWorld={DockHostActor?.IsInWorld}, dockInitiated={dockInitiated}");
-		}
-
 		public override bool Tick(Actor self)
 		{
-			LogStateChange(self);
-
 			switch (dockingState)
 			{
 				case DockingState.Wait:
@@ -189,16 +175,10 @@ namespace OpenRA.Mods.Common.Activities
 
 		public virtual void PlayUndockClientAnimation(Actor self, Action after)
 		{
-			Log.Write("debug", $"[DockDebug] {self.Info.Name}: PlayUndockClientAnimation entered, DockClientBody={DockClientBody?.GetType().Name}");
-
 			if (DockClientBody != null)
 			{
 				dockingState = DockingState.Wait;
-				DockClientBody.PlayReverseDockAnimation(self, () =>
-				{
-					Log.Write("debug", $"[DockDebug] {self.Info.Name}: PlayReverseDockAnimation callback fired");
-					after();
-				});
+				DockClientBody.PlayReverseDockAnimation(self, after);
 			}
 			else
 				after();
