@@ -65,7 +65,6 @@ namespace OpenRA.Mods.Common.Activities
 
 		public override bool Tick(Actor self)
 		{
-
 			switch (dockingState)
 			{
 				case DockingState.Wait:
