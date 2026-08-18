@@ -40,6 +40,7 @@ namespace OpenRA.Mods.Common.Activities
 		readonly INotifyDockHost[] notifyDockHosts;
 
 		bool dockInitiated = false;
+		bool undockForcedAfterHostLoss;
 
 		public GenericDockSequence(Actor self, DockClientManager client, Actor hostActor, IDockHost host,
 			int dockWait, bool isDragRequired, WVec dragOffset, int dragLength)
@@ -68,6 +69,20 @@ namespace OpenRA.Mods.Common.Activities
 			switch (dockingState)
 			{
 				case DockingState.Wait:
+					// Wait means an animation callback is due. PlayUndockAnimations runs the host's
+					// docking overlay when the host is alive at that moment, and only continues from
+					// inside its completion callback — but a host that dies mid-animation stops ticking,
+					// so that callback never arrives and the client is stranded in Wait forever, still
+					// showing its docked pose. Nothing here needs the host any more, so drive the
+					// client's own animation instead and finish. Guarded so it runs once: the call
+					// re-enters Wait while the client animation plays.
+					if (!undockForcedAfterHostLoss && dockInitiated
+						&& (DockHostActor == null || DockHostActor.IsDead || !DockHostActor.IsInWorld))
+					{
+						undockForcedAfterHostLoss = true;
+						PlayUndockClientAnimation(self, () => dockingState = DockingState.Complete);
+					}
+
 					return false;
 
 				case DockingState.Drag:
