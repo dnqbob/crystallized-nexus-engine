@@ -74,8 +74,12 @@ namespace OpenRA.Mods.Common.Traits
 			IsEnabled = true;
 			player = p;
 			tickModules = p.PlayerActor.TraitsImplementing<IBotTick>().ToArray();
+
+			// Activate runs from the Player constructor, before World.Players is populated, so the
+			// display name cannot be resolved yet - touching it here would permanently cache a
+			// fallback name. Perf labels only need to be distinguishable, so use the internal name.
 			tickModulePerfLabels = tickModules
-				.Select(t => $"{p.ResolvedPlayerName}: {t.GetType().Name}")
+				.Select(t => $"{p.InternalName}: {t.GetType().Name}")
 				.ToArray();
 			attackResponseModules = p.PlayerActor.TraitsImplementing<IBotRespondToAttack>().ToArray();
 			foreach (var ibe in p.PlayerActor.TraitsImplementing<IBotEnabled>())

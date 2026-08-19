@@ -108,7 +108,17 @@ namespace OpenRA
 		{
 			get
 			{
-				resolvedPlayerName ??= ResolvePlayerName();
+				if (resolvedPlayerName != null)
+					return resolvedPlayerName;
+
+				// Bot names are enumerated against the other players, which are only known once
+				// World.SetPlayers has run. Resolving earlier (the Player constructor activates bot
+				// logic before that point) would otherwise cache a wrong name for the whole game.
+				var name = ResolvePlayerName();
+				if (World.Players.Length == 0)
+					return name;
+
+				resolvedPlayerName = name;
 				return resolvedPlayerName;
 			}
 		}
